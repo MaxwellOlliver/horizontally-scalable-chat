@@ -1,12 +1,18 @@
-import { node } from '@elysiajs/node'
-import { Elysia } from 'elysia'
+import { createApp } from './app.js'
+import { loadEnv } from './config/env.js'
+import { createContainer } from './composition-root.js'
 
-const port = Number(process.env.PORT ?? 3000)
+const env = loadEnv()
+const { useCases, db } = await createContainer(env)
 
-export const app = new Elysia({ adapter: node() })
-  .get('/health', () => ({ status: 'ok', service: 'auth-service' }))
-  // Auth routes (see specs/auth.spec.md §2.6) get mounted here as they are built:
-  //   POST /auth/register · /auth/login · /auth/refresh · /auth/logout
-  .listen(port, ({ hostname, port }) => {
-    console.log(`🔐 auth-service listening on http://${hostname}:${port}`)
-  })
+const app = createApp(useCases).listen(env.PORT, () => {
+  console.log(`🔐 auth-service listening on port ${env.PORT}`)
+})
+
+const shutdown = async () => {
+  await app.stop()
+  await db.close()
+  process.exit(0)
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)

@@ -6,6 +6,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "types": ["node"],
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,5 +15,5 @@
     "declaration": false
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/__tests__"]
 }
