@@ -1,0 +1,12 @@
+{
+  "name": "@hsc/ws-gateway-go",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "go run ./cmd/gateway",
+    "build": "go build -o dist/ws-gateway-go ./cmd/gateway",
+    "start": "./dist/ws-gateway-go",
+    "lint": "go vet ./...",
+    "test": "go test ./..."
+  }
+}
