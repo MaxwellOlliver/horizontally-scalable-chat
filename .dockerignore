@@ -1,0 +1,10 @@
+# Keep host build artifacts and tooling out of the build context. Images do
+# their own install/compile from manifests + source.
+**/node_modules
+**/dist
+**/.turbo
+.git
+.claude
+.env
+**/.env
+**/*.log
