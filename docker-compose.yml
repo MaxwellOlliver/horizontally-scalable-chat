@@ -13,6 +13,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-hsc}
+    # Published so a service run locally (outside compose) can reach the DB at
+    # localhost:${POSTGRES_PORT}. The in-compose services still connect over the
+    # internal network via the `postgres` hostname on 5432.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -60,10 +65,34 @@ services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Published so a service run locally (outside compose) can reach it at
+    # localhost:${REDIS_PORT}. In-compose services use redis://redis:6379.
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
+      retries: 10
+
+  # Event bus: topic exchange `domain.events` carrying friend_request.* and
+  # friendship.removed integration events (specs/friends.specs.md §2.4a).
+  # The management UI (15672) is handy for inspecting exchanges/queues locally.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbitmqdata:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
       retries: 10
 
   ws-gateway-go:
@@ -99,3 +128,4 @@ services:
 
 volumes:
   pgdata:
+  rabbitmqdata:
