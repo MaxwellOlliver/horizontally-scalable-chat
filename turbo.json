@@ -13,7 +13,15 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {},
-    "test": {}
+    "lint": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ]
+    }
   }
 }
