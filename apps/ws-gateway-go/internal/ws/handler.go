@@ -19,6 +19,8 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/auth"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 )
@@ -37,10 +39,13 @@ type authFrame struct {
 	Token string `json:"token"`
 }
 
-// clientFrame is any post-auth message; only its type is dispatched on
-// (ping/focus/blur). The chat message protocol is a later task.
+// clientFrame is any post-auth message. `type` selects the handler; the message
+// fields are only read for `message.send` (the rest are presence signals).
 type clientFrame struct {
-	Type string `json:"type"`
+	Type        string `json:"type"`
+	ClientMsgID string `json:"clientMsgId"`
+	ToUserID    string `json:"toUserId"`
+	Body        string `json:"body"`
 }
 
 // serverFrame is the gateway's reply envelope (e.g. {"type":"auth_ok"}).
@@ -62,23 +67,49 @@ type Presence interface {
 	Remove(ctx context.Context, userID, connID string) error
 }
 
+// Deliverer is the outbound side: it subscribes a connection to its user's
+// per-user channel and fans pushed frames back to it (delivery.Hub).
+type Deliverer interface {
+	Register(userID string, c delivery.Conn)
+	Unregister(userID string, c delivery.Conn)
+}
+
+// Inbound is the inbound side: it enqueues a stamped `message.send` envelope onto
+// the chat-service work queue (inbound.RabbitPublisher).
+type Inbound interface {
+	Publish(env inbound.Envelope) error
+}
+
 // Handler upgrades HTTP requests to WebSocket connections and enforces the
 // handshake-auth protocol before registering them.
 type Handler struct {
 	verifier    Verifier
 	registry    *registry.Registry
 	presence    Presence
+	delivery    Deliverer
+	inbound     Inbound
 	authTimeout time.Duration
 	upgrader    websocket.Upgrader
 }
 
 // NewHandler builds a Handler. The origin check is permissive here because TLS
-// and origin enforcement terminate at Nginx in deploy (spec §2.1).
-func NewHandler(v Verifier, reg *registry.Registry, pres Presence, authTimeout time.Duration) *Handler {
+// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del` and
+// `in` are the messaging relay (outbound fan-out / inbound publish); either may
+// be nil to run the gateway without the chat path (e.g. presence-only tests).
+func NewHandler(
+	v Verifier,
+	reg *registry.Registry,
+	pres Presence,
+	del Deliverer,
+	in Inbound,
+	authTimeout time.Duration,
+) *Handler {
 	return &Handler{
 		verifier:    v,
 		registry:    reg,
 		presence:    pres,
+		delivery:    del,
+		inbound:     in,
 		authTimeout: authTimeout,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
@@ -111,6 +142,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.registry.Add(userID, conn)
 	defer h.registry.Remove(userID, conn)
 
+	// Wrap the socket in a single-writer connection now that auth succeeded: both
+	// the read loop and the delivery hub write through it.
+	c := newConnection(conn)
+	defer c.close()
+
+	// Subscribe this socket to the user's outbound channel (spec §2.3); the hub
+	// unsubscribes from Redis on the user's last local disconnect.
+	if h.delivery != nil {
+		h.delivery.Register(userID, c)
+		defer h.delivery.Unregister(userID, c)
+	}
+
 	// §5.1: a live socket is not yet "online" — default to Idle until the client
 	// reports focus. Presence is best-effort: Redis being down must not drop the
 	// connection (auth never depends on it).
@@ -123,11 +166,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logPresence("remove", h.presence.Remove(context.Background(), userID, connID))
 	}()
 
-	if err := conn.WriteJSON(serverFrame{Type: "auth_ok"}); err != nil {
-		return
-	}
+	c.sendJSON(serverFrame{Type: "auth_ok"})
 
-	h.serve(conn, userID, connID)
+	h.serve(c, userID, connID)
 }
 
 // authenticate reads and validates the mandatory first frame. It returns the
@@ -158,16 +199,16 @@ func (h *Handler) authenticate(conn *websocket.Conn) (userID string, closeCode i
 }
 
 // serve handles post-auth frames until the connection closes:
-//   - ping  -> pong + presence heartbeat (refresh TTL, §8.1)
-//   - focus -> presence Online (§5.1)
-//   - blur  -> presence Idle
+//   - ping         -> pong + presence heartbeat (refresh TTL, §8.1)
+//   - focus        -> presence Online (§5.1)
+//   - blur         -> presence Idle
+//   - message.send -> stamp senderId, publish to the inbound work queue (§2.2)
 //
-// Unknown frames are ignored (the chat protocol lands in a later task).
-func (h *Handler) serve(conn *websocket.Conn, userID, connID string) {
-	defer conn.Close()
+// Unknown frames are ignored.
+func (h *Handler) serve(c *connection, userID, connID string) {
 	ctx := context.Background()
 	for {
-		_, data, err := conn.ReadMessage()
+		_, data, err := c.ws.ReadMessage()
 		if err != nil {
 			return
 		}
@@ -178,12 +219,34 @@ func (h *Handler) serve(conn *websocket.Conn, userID, connID string) {
 		switch f.Type {
 		case "ping":
 			logPresence("heartbeat", h.presence.Heartbeat(ctx, userID, connID))
-			_ = conn.WriteJSON(serverFrame{Type: "pong"})
+			c.sendJSON(serverFrame{Type: "pong"})
 		case "focus":
 			logPresence("focus", h.presence.SetState(ctx, userID, connID, presence.Online))
 		case "blur":
 			logPresence("blur", h.presence.SetState(ctx, userID, connID, presence.Idle))
+		case "message.send":
+			h.publishInbound(userID, f)
 		}
+	}
+}
+
+// publishInbound stamps the authenticated senderId onto the client's
+// `message.send` and hands it to the inbound work queue (spec §2.2). The gateway
+// does no validation: a chat-service worker owns the gate, persist and fan-out.
+// Best-effort — a broker hiccup is logged and the client retries on resync.
+func (h *Handler) publishInbound(userID string, f clientFrame) {
+	if h.inbound == nil {
+		return
+	}
+	err := h.inbound.Publish(inbound.Envelope{
+		Type:        "message.send",
+		ClientMsgID: f.ClientMsgID,
+		SenderID:    userID, // never trust a client-supplied sender
+		ToUserID:    f.ToUserID,
+		Body:        f.Body,
+	})
+	if err != nil {
+		log.Printf("inbound publish failed for %s: %v", userID, err)
 	}
 }
 

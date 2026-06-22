@@ -13,6 +13,8 @@ import (
 
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/auth"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/config"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/ws"
@@ -34,7 +36,15 @@ func main() {
 	verifier := auth.NewVerifier(cfg.JWTSecret, cfg.JWTIssuer)
 	reg := registry.New()
 	presenceStore := presence.NewRedisStore(rdb, cfg.PresenceTTL)
-	handler := ws.NewHandler(verifier, reg, presenceStore, cfg.AuthTimeout)
+
+	// Outbound: fan per-user Redis frames out to local sockets (spec §2.3).
+	deliveryHub := delivery.NewHub(rdb)
+	defer deliveryHub.Close()
+	// Inbound: stamp + publish client `message.send` to the work queue (spec §2.2).
+	inboundPublisher := inbound.NewRabbitPublisher(cfg.RabbitMQURL, cfg.InboundQueue)
+	defer func() { _ = inboundPublisher.Close() }()
+
+	handler := ws.NewHandler(verifier, reg, presenceStore, deliveryHub, inboundPublisher, cfg.AuthTimeout)
 
 	mux := http.NewServeMux()
 	mux.Handle("/ws", handler)

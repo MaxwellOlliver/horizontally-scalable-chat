@@ -62,6 +62,22 @@ services:
     expose:
       - "3000"
 
+  # One-shot: apply chat-service's Drizzle migrations (conversations, messages,
+  # friends_read_model) before chat-service starts.
+  migrate-chat:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+      target: build
+    working_dir: /repo/services/chat-service
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -95,6 +111,35 @@ services:
       timeout: 5s
       retries: 10
 
+  # Messaging app tier (messaging spec): consumes the inbound work queue +
+  # friend events, owns conversations/messages/friends_read_model, serves history.
+  chat-service:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+      target: runtime
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      DOMAIN_EVENTS_EXCHANGE: ${DOMAIN_EVENTS_EXCHANGE:-domain.events}
+      INBOUND_QUEUE: ${INBOUND_QUEUE:-chat.inbound}
+      FRIEND_EVENTS_QUEUE: ${FRIEND_EVENTS_QUEUE:-chat.friend-events}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-chat:
+        condition: service_completed_successfully
+    expose:
+      - "3002"
+
   ws-gateway-go:
     build:
       context: .
@@ -106,12 +151,17 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
       WS_AUTH_TIMEOUT_SECONDS: ${WS_AUTH_TIMEOUT_SECONDS:-5}
-      # Cross-instance presence store (REQUIREMENTS §5). Shared by every gateway
-      # replica so a user's status is visible regardless of which one they hit.
+      # Cross-instance presence store (REQUIREMENTS §5) + outbound per-user
+      # delivery channels (messaging spec §2.3). Shared by every gateway replica.
       REDIS_URL: redis://redis:6379
       PRESENCE_TTL_SECONDS: ${PRESENCE_TTL_SECONDS:-30}
+      # Inbound client-message work queue published to chat-service (spec §2.2).
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      INBOUND_QUEUE: ${INBOUND_QUEUE:-chat.inbound}
     depends_on:
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     expose:
       - "8080"

@@ -17,4 +17,11 @@ export {
   type TopicPublishOptions,
   type TopicPublisher,
   createRabbitMqTopicPublisher,
+  type RabbitMqDelivery,
+  type RabbitMqHandler,
+  type RabbitMqConsumer,
+  type RabbitMqWorkQueueConfig,
+  type RabbitMqTopicConsumerConfig,
+  createRabbitMqWorkQueueConsumer,
+  createRabbitMqTopicConsumer,
 } from './rabbitmq.js'
