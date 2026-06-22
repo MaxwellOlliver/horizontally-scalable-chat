@@ -9,8 +9,17 @@ const app = createApp(useCases).listen(env.PORT, () => {
   console.log(`🔐 auth-service listening on port ${env.PORT}`)
 })
 
+let shuttingDown = false
 const shutdown = async () => {
-  await app.stop()
+  if (shuttingDown) return // a second SIGINT/SIGTERM while we're already closing
+  shuttingDown = true
+  try {
+    // Elysia's node adapter can throw "Elysia isn't running" from stop(); the
+    // listener is torn down on exit regardless, so this is safe to ignore.
+    await app.stop()
+  } catch {
+    /* already stopped */
+  }
   await db.close()
   process.exit(0)
 }

@@ -25,6 +25,9 @@ export function toHttpError(err: unknown): HttpError {
     }
   }
 
+  // Unrecognised => unexpected (bug, DB/infra failure). The client gets a safe
+  // generic 500, but we MUST log the cause server-side — otherwise it's invisible.
+  console.error('[auth] unhandled error', err)
   return {
     status: 500,
     body: { error: 'INTERNAL_ERROR', message: 'Internal server error' },

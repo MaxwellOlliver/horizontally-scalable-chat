@@ -11,16 +11,26 @@ RUN corepack enable
 WORKDIR /repo
 
 FROM base AS build
-# Copy only manifests first for better layer caching.
+# Copy every workspace manifest first (better layer caching). All are needed so
+# the frozen lockfile resolves the full graph; auth-service depends on the
+# shared @hsc/platform package.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY packages/platform/package.json packages/platform/package.json
 COPY services/auth-service/package.json services/auth-service/package.json
+COPY services/social-service/package.json services/social-service/package.json
 COPY apps/ws-gateway-go/package.json apps/ws-gateway-go/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
-# Now the source, then build + prune to a self-contained bundle in /out.
+# Source for the shared package + the service we build. Build platform first
+# (auth-service compiles against its emitted types), then prune to a
+# self-contained bundle in /out (deploy injects @hsc/platform's built output).
+COPY packages/platform packages/platform
 COPY services/auth-service services/auth-service
-RUN pnpm --filter @hsc/auth-service build \
- && pnpm --filter @hsc/auth-service deploy --prod /out
+# --legacy: bundle the workspace dep (@hsc/platform) into /out (pnpm v10 deploy
+# otherwise requires inject-workspace-packages).
+RUN pnpm --filter @hsc/platform build \
+ && pnpm --filter @hsc/auth-service build \
+ && pnpm --filter @hsc/auth-service deploy --prod --legacy /out
 
 FROM base AS runtime
 ENV NODE_ENV=production
