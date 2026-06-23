@@ -19,6 +19,9 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/auth"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/logstream"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 )
@@ -37,10 +40,18 @@ type authFrame struct {
 	Token string `json:"token"`
 }
 
-// clientFrame is any post-auth message; only its type is dispatched on
-// (ping/focus/blur). The chat message protocol is a later task.
+// clientFrame is any post-auth message. `type` selects the handler; the other
+// fields are read per type (`message.send` body, `presence.subscribe` userIds).
 type clientFrame struct {
-	Type string `json:"type"`
+	Type        string   `json:"type"`
+	ClientMsgID string   `json:"clientMsgId"`
+	ToUserID    string   `json:"toUserId"`
+	Body        string   `json:"body"`
+	UserIDs     []string `json:"userIds"`
+	// receipt fields
+	ConversationID string `json:"conversationId"`
+	DeliveredUpTo  string `json:"deliveredUpTo"`
+	ReadUpTo       string `json:"readUpTo"`
 }
 
 // serverFrame is the gateway's reply envelope (e.g. {"type":"auth_ok"}).
@@ -62,24 +73,71 @@ type Presence interface {
 	Remove(ctx context.Context, userID, connID string) error
 }
 
+// Deliverer is the outbound side: it subscribes a connection to its user's
+// per-user channel and fans pushed frames back to it, and publishes frames to a
+// user's channel (for relaying ephemeral signals like typing). delivery.Hub.
+type Deliverer interface {
+	Register(userID string, c delivery.Conn)
+	Unregister(userID string, c delivery.Conn)
+	Publish(ctx context.Context, userID string, frame []byte) error
+}
+
+// Inbound is the inbound side: it enqueues stamped client messages and receipts
+// onto the chat-service work queue (inbound.RabbitPublisher).
+type Inbound interface {
+	Publish(env inbound.Envelope) error
+	PublishReceipt(env inbound.ReceiptEnvelope) error
+}
+
+// PresenceFeed lets a connection watch other users' presence (presence.Feed).
+type PresenceFeed interface {
+	Watch(ctx context.Context, userID string, sink presence.Sink)
+	Unwatch(userID string, sink presence.Sink)
+}
+
+// LogStream builds observability log frames tagged with this instance's id
+// (logstream.Logger). Optional — nil disables gateway log emission.
+type LogStream interface {
+	Frame(event string) logstream.Frame
+}
+
 // Handler upgrades HTTP requests to WebSocket connections and enforces the
 // handshake-auth protocol before registering them.
 type Handler struct {
-	verifier    Verifier
-	registry    *registry.Registry
-	presence    Presence
-	authTimeout time.Duration
-	upgrader    websocket.Upgrader
+	verifier     Verifier
+	registry     *registry.Registry
+	presence     Presence
+	delivery     Deliverer
+	inbound      Inbound
+	presenceFeed PresenceFeed
+	logs         LogStream
+	authTimeout  time.Duration
+	upgrader     websocket.Upgrader
 }
 
 // NewHandler builds a Handler. The origin check is permissive here because TLS
-// and origin enforcement terminate at Nginx in deploy (spec §2.1).
-func NewHandler(v Verifier, reg *registry.Registry, pres Presence, authTimeout time.Duration) *Handler {
+// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del`, `in`,
+// `feed` and `logs` are the messaging relay, presence feed and observability log
+// stream; any may be nil to run the gateway without that path (e.g. tests).
+func NewHandler(
+	v Verifier,
+	reg *registry.Registry,
+	pres Presence,
+	del Deliverer,
+	in Inbound,
+	feed PresenceFeed,
+	logs LogStream,
+	authTimeout time.Duration,
+) *Handler {
 	return &Handler{
-		verifier:    v,
-		registry:    reg,
-		presence:    pres,
-		authTimeout: authTimeout,
+		verifier:     v,
+		registry:     reg,
+		presence:     pres,
+		delivery:     del,
+		inbound:      in,
+		presenceFeed: feed,
+		logs:         logs,
+		authTimeout:  authTimeout,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
@@ -111,6 +169,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.registry.Add(userID, conn)
 	defer h.registry.Remove(userID, conn)
 
+	// Wrap the socket in a single-writer connection now that auth succeeded: both
+	// the read loop and the delivery hub write through it.
+	c := newConnection(conn)
+	defer c.close()
+
+	// Subscribe this socket to the user's outbound channel (spec §2.3); the hub
+	// unsubscribes from Redis on the user's last local disconnect.
+	if h.delivery != nil {
+		h.delivery.Register(userID, c)
+		defer h.delivery.Unregister(userID, c)
+	}
+
 	// §5.1: a live socket is not yet "online" — default to Idle until the client
 	// reports focus. Presence is best-effort: Redis being down must not drop the
 	// connection (auth never depends on it).
@@ -123,11 +193,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logPresence("remove", h.presence.Remove(context.Background(), userID, connID))
 	}()
 
-	if err := conn.WriteJSON(serverFrame{Type: "auth_ok"}); err != nil {
+	c.sendJSON(serverFrame{Type: "auth_ok"})
+	h.emitLog(c, "Connected")
+
+	h.serve(c, userID, connID)
+}
+
+// emitLog writes an observability log line straight to the local socket. Gateway
+// logs always concern the connection it holds, so a direct write is reliable and
+// avoids a Redis round-trip (and the race of publishing to a just-subscribed
+// channel). No-op when the log stream is disabled.
+func (h *Handler) emitLog(c *connection, event string) {
+	if h.logs == nil {
 		return
 	}
-
-	h.serve(conn, userID, connID)
+	c.sendJSON(h.logs.Frame(event))
 }
 
 // authenticate reads and validates the mandatory first frame. It returns the
@@ -158,16 +238,22 @@ func (h *Handler) authenticate(conn *websocket.Conn) (userID string, closeCode i
 }
 
 // serve handles post-auth frames until the connection closes:
-//   - ping  -> pong + presence heartbeat (refresh TTL, §8.1)
-//   - focus -> presence Online (§5.1)
-//   - blur  -> presence Idle
+//   - ping              -> pong + presence heartbeat (refresh TTL, §8.1)
+//   - focus             -> presence Online (§5.1)
+//   - blur              -> presence Idle
+//   - message.send      -> stamp senderId, publish to the inbound work queue (§2.2)
+//   - presence.subscribe -> watch the listed users' presence (§5.4)
 //
-// Unknown frames are ignored (the chat protocol lands in a later task).
-func (h *Handler) serve(conn *websocket.Conn, userID, connID string) {
-	defer conn.Close()
+// Unknown frames are ignored.
+func (h *Handler) serve(c *connection, userID, connID string) {
 	ctx := context.Background()
+	// Users this connection is watching presence for (in this app, 0 or 1 — the
+	// open conversation's friend). Torn down on disconnect.
+	watched := map[string]struct{}{}
+	defer h.unwatchAll(watched, c)
+
 	for {
-		_, data, err := conn.ReadMessage()
+		_, data, err := c.ws.ReadMessage()
 		if err != nil {
 			return
 		}
@@ -178,12 +264,129 @@ func (h *Handler) serve(conn *websocket.Conn, userID, connID string) {
 		switch f.Type {
 		case "ping":
 			logPresence("heartbeat", h.presence.Heartbeat(ctx, userID, connID))
-			_ = conn.WriteJSON(serverFrame{Type: "pong"})
+			c.sendJSON(serverFrame{Type: "pong"})
 		case "focus":
 			logPresence("focus", h.presence.SetState(ctx, userID, connID, presence.Online))
+			h.emitLog(c, "Presence changed to Online")
 		case "blur":
 			logPresence("blur", h.presence.SetState(ctx, userID, connID, presence.Idle))
+			h.emitLog(c, "Presence changed to Idle")
+		case "message.send":
+			h.publishInbound(userID, f)
+			h.emitLog(c, "Message frame received")
+		case "presence.subscribe":
+			h.updateWatched(ctx, watched, c, f.UserIDs)
+		case "typing.start":
+			h.relayTyping(ctx, userID, f.ToUserID, true)
+		case "typing.stop":
+			h.relayTyping(ctx, userID, f.ToUserID, false)
+		case "receipt":
+			h.publishReceipt(userID, f)
 		}
+	}
+}
+
+// publishReceipt stamps the authenticated reporter onto a delivery/read receipt
+// and enqueues it for chat-service (REQUIREMENTS §4). Best-effort.
+func (h *Handler) publishReceipt(userID string, f clientFrame) {
+	if h.inbound == nil {
+		return
+	}
+	err := h.inbound.PublishReceipt(inbound.ReceiptEnvelope{
+		Type:           "receipt",
+		UserID:         userID, // never trust a client-supplied reporter
+		ConversationID: f.ConversationID,
+		DeliveredUpTo:  f.DeliveredUpTo,
+		ReadUpTo:       f.ReadUpTo,
+	})
+	if err != nil {
+		log.Printf("receipt publish failed for %s: %v", userID, err)
+	}
+}
+
+// typingFrame is the ephemeral signal forwarded to the conversation partner.
+type typingFrame struct {
+	Type string     `json:"type"`
+	Data typingData `json:"data"`
+}
+
+type typingData struct {
+	UserID string `json:"userId"`
+}
+
+// relayTyping forwards a typing signal to the recipient's per-user channel,
+// stamped with the authenticated sender (never client-supplied). Ephemeral and
+// best-effort: never persisted, never acked (REQUIREMENTS §6).
+func (h *Handler) relayTyping(ctx context.Context, from, to string, typing bool) {
+	if h.delivery == nil || to == "" {
+		return
+	}
+	frameType := "typing.stop"
+	if typing {
+		frameType = "typing.start"
+	}
+	payload, err := json.Marshal(typingFrame{Type: frameType, Data: typingData{UserID: from}})
+	if err != nil {
+		return
+	}
+	if err := h.delivery.Publish(ctx, to, payload); err != nil {
+		log.Printf("typing relay failed %s->%s: %v", from, to, err)
+	}
+}
+
+// updateWatched reconciles the connection's watched-user set against the
+// declarative `presence.subscribe` list — subscribing to the newly-listed users
+// and unsubscribing from the dropped ones.
+func (h *Handler) updateWatched(ctx context.Context, watched map[string]struct{}, c *connection, userIDs []string) {
+	if h.presenceFeed == nil {
+		return
+	}
+	next := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id != "" {
+			next[id] = struct{}{}
+		}
+	}
+	for id := range watched {
+		if _, keep := next[id]; !keep {
+			h.presenceFeed.Unwatch(id, c)
+			delete(watched, id)
+		}
+	}
+	for id := range next {
+		if _, have := watched[id]; !have {
+			h.presenceFeed.Watch(ctx, id, c)
+			watched[id] = struct{}{}
+		}
+	}
+}
+
+func (h *Handler) unwatchAll(watched map[string]struct{}, c *connection) {
+	if h.presenceFeed == nil {
+		return
+	}
+	for id := range watched {
+		h.presenceFeed.Unwatch(id, c)
+	}
+}
+
+// publishInbound stamps the authenticated senderId onto the client's
+// `message.send` and hands it to the inbound work queue (spec §2.2). The gateway
+// does no validation: a chat-service worker owns the gate, persist and fan-out.
+// Best-effort — a broker hiccup is logged and the client retries on resync.
+func (h *Handler) publishInbound(userID string, f clientFrame) {
+	if h.inbound == nil {
+		return
+	}
+	err := h.inbound.Publish(inbound.Envelope{
+		Type:        "message.send",
+		ClientMsgID: f.ClientMsgID,
+		SenderID:    userID, // never trust a client-supplied sender
+		ToUserID:    f.ToUserID,
+		Body:        f.Body,
+	})
+	if err != nil {
+		log.Printf("inbound publish failed for %s: %v", userID, err)
 	}
 }
 

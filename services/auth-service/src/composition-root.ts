@@ -12,7 +12,13 @@ import { AuthenticateUser } from './application/use-cases/authenticate-user.js'
 import { RefreshSession } from './application/use-cases/refresh-session.js'
 import { RegisterUser } from './application/use-cases/register-user.js'
 import { RevokeSession } from './application/use-cases/revoke-session.js'
-import { uuidv7Generator } from '@hsc/platform'
+import {
+  createLogger,
+  createRedisPublisher,
+  resolveInstanceId,
+  uuidv7Generator,
+  type LogEmitter,
+} from '@hsc/platform'
 import { createDatabase, type Database } from './infrastructure/db/client.js'
 import { createDrizzleRefreshTokenRepository } from './infrastructure/repositories/drizzle-refresh-token-repository.js'
 import { createDrizzleUserRepository } from './infrastructure/repositories/drizzle-user-repository.js'
@@ -69,7 +75,9 @@ export function assembleUseCases(ports: AuthPorts): AuthUseCases {
 
 export interface Container {
   useCases: AuthUseCases
+  logger: LogEmitter
   db: Database
+  close(): Promise<void>
 }
 
 /** Production container: real adapters wired from validated env. */
@@ -98,5 +106,19 @@ export async function createContainer(env: Env): Promise<Container> {
     dummyHash,
   })
 
-  return { useCases, db }
+  const logPublisher = createRedisPublisher(env.REDIS_URL)
+  const logger = createLogger({
+    instanceId: resolveInstanceId('auth-service'),
+    source: 'auth-service',
+    publish: (channel, message) => logPublisher.publish(channel, message),
+  })
+
+  return {
+    useCases,
+    logger,
+    db,
+    close: async () => {
+      await Promise.allSettled([logPublisher.close(), db.close()])
+    },
+  }
 }

@@ -30,6 +30,8 @@ export interface RequestOptions {
 export interface TestUser {
   id: string
   token: string
+  email: string
+  displayName: string
 }
 
 export interface Harness {
@@ -40,11 +42,18 @@ export interface Harness {
   livePush: CapturingLivePush
   users: InMemoryUserDirectory
   clock: FakeClock
-  /** Registers a known user in the directory and returns its id + a valid token. */
-  createUser: () => Promise<TestUser>
+  /** Registers a known user (id + email + name) in the directory and returns a token. */
+  createUser: (displayName?: string) => Promise<TestUser>
   /** Mints a valid HS256 access token for an arbitrary (possibly unknown) id. */
   tokenFor: (userId: string) => Promise<string>
   request: (method: string, path: string, opts?: RequestOptions) => Promise<TestResponse>
+  /** Observability log lines captured from the routes. */
+  logs: LogCapture[]
+}
+
+export interface LogCapture {
+  userIds: string[]
+  event: string
 }
 
 /**
@@ -74,7 +83,11 @@ export function buildHarness(overrides: { livePush?: LivePush } = {}): Harness {
   }
 
   const verifier = createJwtAccessTokenVerifier(SECRET, ISSUER)
-  const app = createApp(assembleUseCases(ports), verifier)
+  const logs: LogCapture[] = []
+  const app = createApp(assembleUseCases(ports), verifier, {
+    emit: (userIds, event) =>
+      logs.push({ userIds: typeof userIds === 'string' ? [userIds] : [...userIds], event }),
+  })
 
   const key = new TextEncoder().encode(SECRET)
   const tokenFor = (userId: string): Promise<string> =>
@@ -86,10 +99,14 @@ export function buildHarness(overrides: { livePush?: LivePush } = {}): Harness {
       .setExpirationTime('10m')
       .sign(key)
 
-  const createUser = async (): Promise<TestUser> => {
+  let userCount = 0
+  const createUser = async (displayName?: string): Promise<TestUser> => {
     const id = uuidv7()
-    users.ids.add(id)
-    return { id, token: await tokenFor(id) }
+    userCount += 1
+    const name = displayName ?? `User ${userCount}`
+    const email = `user${userCount}-${id.slice(0, 8)}@test.dev`
+    users.add(id, email, name)
+    return { id, token: await tokenFor(id), email, displayName: name }
   }
 
   const request = async (
@@ -121,6 +138,7 @@ export function buildHarness(overrides: { livePush?: LivePush } = {}): Harness {
     createUser,
     tokenFor,
     request,
+    logs,
   }
 }
 

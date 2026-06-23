@@ -1,0 +1,33 @@
+{
+  "name": "@hsc/chat-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@elysiajs/node": "^1.4.5",
+    "@hsc/platform": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "elysia": "^1.4.29",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "drizzle-kit": "^0.30.1",
+    "jose": "^5.9.6",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "uuidv7": "^1.0.2",
+    "vitest": "^2.1.8"
+  }
+}

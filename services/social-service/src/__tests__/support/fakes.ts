@@ -7,7 +7,7 @@ import type { FriendRequestRepository } from '../../application/ports/friend-req
 import type { FriendshipRepository } from '../../application/ports/friendship-repository.js'
 import type { IdGenerator } from '../../application/ports/id-generator.js'
 import type { LiveFrame, LivePush } from '../../application/ports/live-push.js'
-import type { UserDirectory } from '../../application/ports/user-directory.js'
+import type { UserDirectory, UserProfile } from '../../application/ports/user-directory.js'
 import type { DomainEvent } from '../../domain/events.js'
 
 /** Advanceable clock for deterministic timestamps. */
@@ -174,10 +174,26 @@ export class FailingLivePush implements LivePush {
   }
 }
 
-/** Existence directory backed by a set of known user ids (AC-S6). */
+/** Directory backed by in-memory profiles (email lookup + name resolution). */
 export class InMemoryUserDirectory implements UserDirectory {
-  readonly ids = new Set<string>()
-  async exists(userId: string): Promise<boolean> {
-    return this.ids.has(userId)
+  readonly profiles = new Map<string, { id: string; email: string; displayName: string }>()
+
+  async findByEmail(email: string): Promise<UserProfile | null> {
+    for (const p of this.profiles.values()) {
+      if (p.email.toLowerCase() === email.toLowerCase()) return { id: p.id, displayName: p.displayName }
+    }
+    return null
+  }
+
+  async listProfiles(ids: string[]): Promise<UserProfile[]> {
+    return ids.flatMap((id) => {
+      const p = this.profiles.get(id)
+      return p ? [{ id: p.id, displayName: p.displayName }] : []
+    })
+  }
+
+  /** Test helper: register a known user with an email + display name. */
+  add(id: string, email: string, displayName: string): void {
+    this.profiles.set(id, { id, email, displayName })
   }
 }

@@ -1,8 +1,11 @@
 import { z } from 'zod'
 
-/** Request validation (spec §2.6). A parse failure maps to 422. */
+/**
+ * Send-request body: the addressee is identified by email (the handle a user
+ * actually knows), resolved to an id server-side. A parse failure maps to 422.
+ */
 export const sendRequestSchema = z.object({
-  addresseeId: z.string().uuid(),
+  email: z.string().email(),
 })
 
 export const requestIdSchema = z.string().uuid()

@@ -1,8 +1,16 @@
+/** A user's public-ish display profile (from the auth-owned `users` table). */
+export interface UserProfile {
+  id: string
+  displayName: string
+}
+
 /**
- * Existence check for users owned by the auth-service (AC-S6). social-service
- * does not own the users table, so this is a read-only directory lookup rather
- * than a foreign key.
+ * Read-only directory over the auth-service's `users` table (AC-S6). social-service
+ * shares the Postgres instance but does not own this table — there is no foreign
+ * key, just lookups: email → user (to resolve a send-request addressee) and batch
+ * name resolution (to label friends/requests).
  */
 export interface UserDirectory {
-  exists(userId: string): Promise<boolean>
+  findByEmail(email: string): Promise<UserProfile | null>
+  listProfiles(ids: string[]): Promise<UserProfile[]>
 }

@@ -18,6 +18,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 COPY packages/platform/package.json packages/platform/package.json
 COPY services/auth-service/package.json services/auth-service/package.json
 COPY services/social-service/package.json services/social-service/package.json
+COPY services/chat-service/package.json services/chat-service/package.json
 COPY apps/ws-gateway-go/package.json apps/ws-gateway-go/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile

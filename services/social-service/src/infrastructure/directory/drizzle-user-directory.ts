@@ -1,17 +1,30 @@
-import { sql } from 'drizzle-orm'
-import type { UserDirectory } from '../../application/ports/user-directory.js'
+import { eq, inArray } from 'drizzle-orm'
+import type { UserDirectory, UserProfile } from '../../application/ports/user-directory.js'
 import type { Database } from '../db/client.js'
+import { users } from '../db/external.js'
 
 /**
- * Existence check against the auth-service's `users` table (AC-S6). Read-only:
- * social-service shares the Postgres instance but does not own this table, so
- * there is no foreign key — just a directory lookup.
+ * Directory lookups against the auth-service's `users` table (read-only;
+ * social-service shares the DB but does not own the table — no FK).
  */
 export function createDrizzleUserDirectory(db: Database): UserDirectory {
   return {
-    async exists(userId: string): Promise<boolean> {
-      const rows = await db.execute(sql`select 1 from users where id = ${userId} limit 1`)
-      return rows.length > 0
+    async findByEmail(email: string): Promise<UserProfile | null> {
+      // `email` is citext, so this match is case-insensitive.
+      const [row] = await db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1)
+      return row ?? null
+    },
+
+    async listProfiles(ids: string[]): Promise<UserProfile[]> {
+      if (ids.length === 0) return []
+      return db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, ids))
     },
   }
 }

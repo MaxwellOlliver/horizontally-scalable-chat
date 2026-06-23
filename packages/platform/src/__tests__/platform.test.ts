@@ -4,6 +4,7 @@ import { createJwtAccessTokenVerifier } from '../jwt.js'
 import { systemClock } from '../clock.js'
 import { uuidv7Generator } from '../id-generator.js'
 import { userChannel } from '../redis.js'
+import { createLogger, logChannel, type LogFrame } from '../logging.js'
 
 const SECRET = 'test-secret-test-secret-test-secret-123'
 const ISSUER = 'hsc-auth-test'
@@ -38,6 +39,68 @@ describe('uuidv7Generator', () => {
 describe('userChannel', () => {
   it('formats the per-user channel name', () => {
     expect(userChannel('abc')).toBe('user:abc')
+  })
+})
+
+describe('logChannel', () => {
+  it('formats the per-user log channel name, distinct from the delivery channel', () => {
+    expect(logChannel('abc')).toBe('logs:abc')
+    expect(logChannel('abc')).not.toBe(userChannel('abc'))
+  })
+})
+
+describe('createLogger', () => {
+  const at = new Date('2026-06-23T15:00:00.000Z')
+  function setup() {
+    const calls: Array<{ channel: string; message: LogFrame }> = []
+    const logger = createLogger({
+      instanceId: 'chat-service-a3f1',
+      source: 'chat-service',
+      publish: async (channel, message) => {
+        calls.push({ channel, message: message as LogFrame })
+      },
+      now: () => at,
+    })
+    return { calls, logger }
+  }
+
+  it('emits a tagged log frame to a single user channel', () => {
+    const { calls, logger } = setup()
+    logger.emit('user-1', 'Message sent')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].channel).toBe('logs:user-1')
+    expect(calls[0].message).toEqual({
+      type: 'log',
+      data: {
+        instance: 'chat-service-a3f1',
+        source: 'chat-service',
+        event: 'Message sent',
+        at: at.toISOString(),
+      },
+    })
+  })
+
+  it('fans out to every distinct user, deduping repeats (actor === counterparty)', () => {
+    const { calls, logger } = setup()
+    logger.emit(['user-1', 'user-2', 'user-1'], 'Message sent')
+    expect(calls.map((c) => c.channel).sort()).toEqual(['logs:user-1', 'logs:user-2'])
+  })
+
+  it('includes optional detail when given', () => {
+    const { calls, logger } = setup()
+    logger.emit('user-1', 'Receipt recorded', { conversationId: 'c-9' })
+    expect(calls[0].message.data.detail).toEqual({ conversationId: 'c-9' })
+  })
+
+  it('never throws into the caller when a publish rejects', () => {
+    const logger = createLogger({
+      instanceId: 'chat-service-a3f1',
+      source: 'chat-service',
+      publish: async () => {
+        throw new Error('redis down')
+      },
+    })
+    expect(() => logger.emit('user-1', 'Message sent')).not.toThrow()
   })
 })
 

@@ -16,7 +16,7 @@ describe('Removing a friend', () => {
   async function befriend(from: TestUser, to: TestUser): Promise<void> {
     const sent = await h.request('POST', '/social/friends/requests', {
       token: from.token,
-      body: { addresseeId: to.id },
+      body: { email: to.email },
     })
     await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, { token: to.token })
   }
@@ -58,7 +58,7 @@ describe('Removing a friend', () => {
     // A fresh request is allowed (not blocked by the historical accepted row).
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
     expect(res.status).toBe(201)
     expect(res.body.status).toBe('pending')

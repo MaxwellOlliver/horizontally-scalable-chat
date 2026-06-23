@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/auth"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 )
@@ -31,7 +34,32 @@ type testRig struct {
 	server   *httptest.Server
 	registry *registry.Registry
 	presence *presence.RedisStore
+	delivery *delivery.Hub
+	inbound  *stubInbound
+	rdb      *redis.Client
 	url      string
+}
+
+// stubInbound captures published envelopes so tests can assert the gateway
+// stamps the sender and publishes without standing up a real broker.
+type stubInbound struct {
+	mu        sync.Mutex
+	published []inbound.Envelope
+}
+
+func (s *stubInbound) Publish(env inbound.Envelope) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.published = append(s.published, env)
+	return nil
+}
+
+func (s *stubInbound) PublishReceipt(inbound.ReceiptEnvelope) error { return nil }
+
+func (s *stubInbound) all() []inbound.Envelope {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]inbound.Envelope(nil), s.published...)
 }
 
 func newRig(t *testing.T, authTimeout time.Duration) *testRig {
@@ -46,14 +74,21 @@ func newRig(t *testing.T, authTimeout time.Duration) *testRig {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	pres := presence.NewRedisStore(rdb, 30*time.Second)
+	hub := delivery.NewHub(rdb)
+	t.Cleanup(hub.Close)
+	in := &stubInbound{}
 
-	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, authTimeout)
+	feed := presence.NewFeed(rdb, pres)
+	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, hub, in, feed, nil, authTimeout)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return &testRig{
 		server:   srv,
 		registry: reg,
 		presence: pres,
+		delivery: hub,
+		inbound:  in,
+		rdb:      rdb,
 		url:      "ws" + strings.TrimPrefix(srv.URL, "http"),
 	}
 }

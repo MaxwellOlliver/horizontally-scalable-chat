@@ -13,7 +13,7 @@ describe('Authentication & validation', () => {
 
   it('rejects requests with no Bearer token (401)', async () => {
     const res = await h.request('POST', '/social/friends/requests', {
-      body: { addresseeId: '33333333-3333-7333-8333-333333333333' },
+      body: { email: 'stranger@test.dev' },
     })
     expect(res.status).toBe(401)
     expect(res.body.error).toBe('UNAUTHORIZED')
@@ -23,7 +23,7 @@ describe('Authentication & validation', () => {
   it('rejects requests with an invalid/garbage token (401)', async () => {
     const res = await h.request('POST', '/social/friends/requests', {
       token: 'not-a-real-jwt',
-      body: { addresseeId: '33333333-3333-7333-8333-333333333333' },
+      body: { email: 'stranger@test.dev' },
     })
     expect(res.status).toBe(401)
   })
@@ -35,11 +35,11 @@ describe('Authentication & validation', () => {
     expect(res.status).toBe(401)
   })
 
-  it('rejects a malformed addresseeId with 422', async () => {
+  it('rejects a malformed email with 422', async () => {
     const a = await h.createUser()
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: 'not-a-uuid' },
+      body: { email: 'not-an-email' },
     })
     expect(res.status).toBe(422)
     expect(res.body.error).toBe('VALIDATION_ERROR')

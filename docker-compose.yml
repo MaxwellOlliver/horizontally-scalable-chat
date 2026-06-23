@@ -1,21 +1,46 @@
-name: hsc-auth
+name: hsc-relay
 
-# Auth stack (T9): Postgres + auth-service (app tier) + ws-gateway-go + Nginx.
-# Nginx routes /auth/* to the app and the WS upgrade to the gateway. The shared
-# JWT secret + issuer reach BOTH services from a single source (.env), which is
-# the cross-language contract that lets the gateway verify tokens locally
-# (specs/auth.spec.md §2.8, AC-W2). See .env.example.
+# Full local stack for the horizontally-scalable chat.
+#
+#   Infrastructure : postgres · redis · rabbitmq
+#   Migrations     : migrate-auth · migrate-social · migrate-chat (one-shots)
+#   App tiers      : auth-service · social-service · chat-service
+#   Gateway        : ws-gateway-go (WebSocket)
+#   Edge           : nginx (routes /auth /social /chat /presence /ws)
+#
+# Ordering is driven by HEALTHCHECKS, not guesswork: each app tier waits for the
+# infrastructure it uses to be *healthy* (not merely started) and for its
+# migration one-shot to complete; nginx waits for every upstream to be healthy
+# before it boots. The shared JWT secret + issuer reach every service from one
+# source (.env) — the cross-language contract that lets the gateway verify
+# tokens locally (specs/auth.spec.md §2.8). See .env.example.
+#
+# HORIZONTAL SCALING (the point of this project). The app tiers and gateway are
+# stateless and use `expose` (no host port) + no container_name, so they scale:
+#
+#   docker compose up -d --build --scale chat-service=3 --scale ws-gateway-go=2
+#
+# Each replica derives a distinct instance id from its container hostname
+# (@hsc/platform resolveInstanceId / logstream.ResolveInstanceID), surfaced in
+# the client's activity log. nginx round-robins the HTTP tiers and least_conn's
+# the gateway (infra/nginx/nginx.conf); the chat work queue load-balances via
+# competing consumers; cross-instance delivery rides Redis pub/sub. Bring the
+# replica set up together — nginx resolves the gateway pool once at boot.
+
+x-postgres-url: &postgres-url
+  postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
 
 services:
+  # ---------------------------------------------------------------- infrastructure
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-hsc}
     # Published so a service run locally (outside compose) can reach the DB at
-    # localhost:${POSTGRES_PORT}. The in-compose services still connect over the
-    # internal network via the `postgres` hostname on 5432.
+    # localhost:${POSTGRES_PORT}. In-compose services use the `postgres` hostname.
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -26,47 +51,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # One-shot: apply Drizzle migrations before the app starts. Uses the build
-  # stage (which still has drizzle-kit / dev deps) rather than the slim runtime.
-  migrate:
-    build:
-      context: .
-      dockerfile: services/auth-service/Dockerfile
-      target: build
-    working_dir: /repo/services/auth-service
-    command: ["pnpm", "db:migrate"]
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
-  auth-service:
-    build:
-      context: .
-      dockerfile: services/auth-service/Dockerfile
-      target: runtime
-    environment:
-      PORT: 3000
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
-      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-600}
-      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-1296000}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    expose:
-      - "3000"
-
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    # Per-user pub/sub delivery channels (user:{id}); no persistence needed.
     command: ["redis-server", "--save", "", "--appendonly", "no"]
-    # Published so a service run locally (outside compose) can reach it at
-    # localhost:${REDIS_PORT}. In-compose services use redis://redis:6379.
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -75,11 +64,11 @@ services:
       timeout: 3s
       retries: 10
 
-  # Event bus: topic exchange `domain.events` carrying friend_request.* and
-  # friendship.removed integration events (specs/friends.specs.md §2.4a).
-  # The management UI (15672) is handy for inspecting exchanges/queues locally.
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    # Topic exchange `domain.events` (friend events) + the chat inbound work
+    # queue. Management UI on 15672 is handy for inspecting exchanges/queues.
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
@@ -90,15 +79,170 @@ services:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # check_port_connectivity verifies the AMQP listener (5672) is actually
+      # accepting — a plain `ping` passes before the port is up, which is what
+      # raced chat-service's consumer on a fresh boot.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # ------------------------------------------------------------------- migrations
+  # One-shots: each service owns its tables and migrates into the same DB with an
+  # isolated bookkeeping table (drizzle.config migrations.table), so no service's
+  # migrations are skipped by another's timestamp.
+  migrate-auth:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+      target: build
+    working_dir: /repo/services/auth-service
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: *postgres-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-social:
+    build:
+      context: .
+      dockerfile: services/social-service/Dockerfile
+      target: build
+    working_dir: /repo/services/social-service
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: *postgres-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate-chat:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+      target: build
+    working_dir: /repo/services/chat-service
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: *postgres-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # --------------------------------------------------------------------- app tiers
+  # Identity: /auth/* — issues & verifies tokens, owns users + refresh tokens.
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DATABASE_URL: *postgres-url
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-600}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-1296000}
+      # Observability log stream — publishes per-user log frames the gateway relays.
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate-auth:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 15s
 
+  # Friends: /social/* — friend requests + friendships; emits domain events to
+  # RabbitMQ and pushes live list-update frames via Redis.
+  social-service:
+    build:
+      context: .
+      dockerfile: services/social-service/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DATABASE_URL: *postgres-url
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      DOMAIN_EVENTS_EXCHANGE: ${DOMAIN_EVENTS_EXCHANGE:-domain.events}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-social:
+        condition: service_completed_successfully
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Messaging: /chat/* — consumes the inbound work queue + friend events, owns
+  # conversations/messages/friends_read_model, serves history.
+  chat-service:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    environment:
+      PORT: 3002
+      DATABASE_URL: *postgres-url
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      DOMAIN_EVENTS_EXCHANGE: ${DOMAIN_EVENTS_EXCHANGE:-domain.events}
+      INBOUND_QUEUE: ${INBOUND_QUEUE:-chat.inbound}
+      FRIEND_EVENTS_QUEUE: ${FRIEND_EVENTS_QUEUE:-chat.friend-events}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate-chat:
+        condition: service_completed_successfully
+    expose:
+      - "3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ----------------------------------------------------------------------- gateway
   ws-gateway-go:
     build:
       context: .
       dockerfile: apps/ws-gateway-go/Dockerfile
+    restart: unless-stopped
     environment:
       PORT: 8080
       # SAME secret + issuer as auth-service — verifies access tokens locally,
@@ -106,25 +250,45 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
       WS_AUTH_TIMEOUT_SECONDS: ${WS_AUTH_TIMEOUT_SECONDS:-5}
-      # Cross-instance presence store (REQUIREMENTS §5). Shared by every gateway
-      # replica so a user's status is visible regardless of which one they hit.
-      REDIS_URL: redis://redis:6379
       PRESENCE_TTL_SECONDS: ${PRESENCE_TTL_SECONDS:-30}
+      # Outbound per-user delivery channels (spec §2.3) + cross-instance presence.
+      REDIS_URL: redis://redis:6379
+      # Inbound client-message work queue published to chat-service (spec §2.2).
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      INBOUND_QUEUE: ${INBOUND_QUEUE:-chat.inbound}
     depends_on:
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     expose:
       - "8080"
+    healthcheck:
+      # Distroless image: the binary health-checks itself (no shell/curl).
+      test: ["CMD", "/ws-gateway-go", "-healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
+  # -------------------------------------------------------------------------- edge
   nginx:
     image: nginx:1.27-alpine
+    restart: unless-stopped
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "${HTTP_PORT:-8080}:80"
+    # Every upstream healthy before nginx boots, so the static upstreams resolve.
     depends_on:
-      - auth-service
-      - ws-gateway-go
+      auth-service:
+        condition: service_healthy
+      social-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      ws-gateway-go:
+        condition: service_healthy
 
 volumes:
   pgdata:

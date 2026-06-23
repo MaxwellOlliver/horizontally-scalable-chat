@@ -3,6 +3,8 @@ import { acceptPending, type AcceptPendingDeps } from '../accept-pending.js'
 
 export interface AcceptFriendRequestResult {
   friendshipId: string
+  /** The original requester — the counterparty to notify in the activity log. */
+  requesterId: string
 }
 
 /**
@@ -22,6 +24,6 @@ export class AcceptFriendRequest {
       throw new NotAddresseeError() // AC-R3
     }
     const friendship = await acceptPending(this.deps, request)
-    return { friendshipId: friendship.id }
+    return { friendshipId: friendship.id, requesterId: request.requesterId }
   }
 }

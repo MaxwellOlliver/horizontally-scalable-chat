@@ -17,7 +17,7 @@ describe('Real-time list updates', () => {
   async function send(from: TestUser, to: TestUser): Promise<string> {
     const res = await h.request('POST', '/social/friends/requests', {
       token: from.token,
-      body: { addresseeId: to.id },
+      body: { email: to.email },
     })
     return res.body.requestId
   }
@@ -91,7 +91,7 @@ describe('Real-time list updates', () => {
 
     const res = await offline.request('POST', '/social/friends/requests', {
       token: x.token,
-      body: { addresseeId: y.id },
+      body: { email: y.email },
     })
     expect(res.status).toBe(201)
     expect(errorSpy).toHaveBeenCalled() // the push failure was swallowed, not propagated

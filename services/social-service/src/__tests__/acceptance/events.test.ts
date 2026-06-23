@@ -16,7 +16,7 @@ describe('Integration events', () => {
   async function send(from: TestUser, to: TestUser): Promise<string> {
     const res = await h.request('POST', '/social/friends/requests', {
       token: from.token,
-      body: { addresseeId: to.id },
+      body: { email: to.email },
     })
     return res.body.requestId
   }

@@ -13,8 +13,24 @@ export {
 } from './jwt.js'
 export { type RedisPublisher, createRedisPublisher, userChannel } from './redis.js'
 export {
+  type LogFrame,
+  type LogEmitter,
+  type LoggerConfig,
+  createLogger,
+  resolveInstanceId,
+  logChannel,
+  noopLogger,
+} from './logging.js'
+export {
   type RabbitMqTopicConfig,
   type TopicPublishOptions,
   type TopicPublisher,
   createRabbitMqTopicPublisher,
+  type RabbitMqDelivery,
+  type RabbitMqHandler,
+  type RabbitMqConsumer,
+  type RabbitMqWorkQueueConfig,
+  type RabbitMqTopicConsumerConfig,
+  createRabbitMqWorkQueueConsumer,
+  createRabbitMqTopicConsumer,
 } from './rabbitmq.js'

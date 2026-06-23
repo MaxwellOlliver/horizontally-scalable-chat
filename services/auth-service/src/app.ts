@@ -1,13 +1,15 @@
 import { node } from '@elysiajs/node'
 import { Elysia } from 'elysia'
+import { noopLogger, type LogEmitter } from '@hsc/platform'
 import { createAuthRoutes, type AuthUseCases } from './interface/http/routes/auth.js'
 
 /**
  * Builds the Elysia app (no `.listen`) so tests can drive it via `app.handle`
- * and the entry point can own the listen call.
+ * and the entry point can own the listen call. The logger defaults to a no-op
+ * so tests need no transport; production passes a Redis-backed one.
  */
-export function createApp(useCases: AuthUseCases) {
+export function createApp(useCases: AuthUseCases, logger: LogEmitter = noopLogger) {
   return new Elysia({ adapter: node() })
     .get('/health', () => ({ status: 'ok', service: 'auth-service' }))
-    .use(createAuthRoutes(useCases))
+    .use(createAuthRoutes(useCases, logger))
 }

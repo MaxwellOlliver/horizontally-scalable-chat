@@ -17,7 +17,7 @@ describe('Responding to a friend request', () => {
   async function sendPending(): Promise<string> {
     const res = await h.request('POST', '/social/friends/requests', {
       token: requester.token,
-      body: { addresseeId: addressee.id },
+      body: { email: addressee.email },
     })
     return res.body.requestId
   }
