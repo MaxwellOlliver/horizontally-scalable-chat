@@ -4,6 +4,7 @@ import {
   index,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -74,6 +75,28 @@ export const friendsReadModel = pgTable('friends_read_model', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/**
+ * message_receipts (REQUIREMENTS §4). Per conversation + per user, the two
+ * high-water marks: the highest message id that user has had `delivered` and
+ * `read` (each a UUIDv7). The OTHER participant reads these to render every
+ * checkmark locally — no per-message receipt rows (§4.4/4.5). Advancing is
+ * `max()` so duplicate/retried receipts are harmless (§4.7).
+ */
+export const messageReceipts = pgTable(
+  'message_receipts',
+  {
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    userId: uuid('user_id').notNull(),
+    deliveredUpTo: uuid('delivered_up_to'),
+    readUpTo: uuid('read_up_to'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],
+)
+
 export type ConversationRow = typeof conversations.$inferSelect
 export type MessageRow = typeof messages.$inferSelect
 export type FriendsReadModelRow = typeof friendsReadModel.$inferSelect
+export type MessageReceiptRow = typeof messageReceipts.$inferSelect

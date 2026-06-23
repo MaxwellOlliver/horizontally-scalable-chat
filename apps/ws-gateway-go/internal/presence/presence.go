@@ -7,6 +7,7 @@ package presence
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -91,11 +92,19 @@ func (s *RedisStore) write(ctx context.Context, userID, connID string, st Status
 }
 
 func (s *RedisStore) Register(ctx context.Context, userID, connID string, st Status) error {
-	return s.write(ctx, userID, connID, st)
+	if err := s.write(ctx, userID, connID, st); err != nil {
+		return err
+	}
+	s.publishChange(ctx, userID)
+	return nil
 }
 
 func (s *RedisStore) SetState(ctx context.Context, userID, connID string, st Status) error {
-	return s.write(ctx, userID, connID, st)
+	if err := s.write(ctx, userID, connID, st); err != nil {
+		return err
+	}
+	s.publishChange(ctx, userID)
+	return nil
 }
 
 // Heartbeat refreshes TTLs and the liveness score without touching the stored
@@ -114,8 +123,42 @@ func (s *RedisStore) Remove(ctx context.Context, userID, connID string) error {
 	pipe := s.rdb.TxPipeline()
 	pipe.ZRem(ctx, userKey(userID), connID)
 	pipe.Del(ctx, connKey(connID))
-	_, err := pipe.Exec(ctx)
-	return err
+	if _, err := pipe.Exec(ctx); err != nil {
+		return err
+	}
+	s.publishChange(ctx, userID)
+	return nil
+}
+
+// presenceChannel is the per-user pub/sub channel a friend's gateway subscribes
+// to (via the Feed) to watch that user's status. Distinct from the ZSET key.
+func presenceChannel(userID string) string { return "presence-feed:" + userID }
+
+type changeFrame struct {
+	Type string     `json:"type"`
+	Data changeData `json:"data"`
+}
+
+type changeData struct {
+	UserID string `json:"userId"`
+	Status string `json:"status"`
+}
+
+// changePayload is the `presence.changed` frame forwarded verbatim to watchers.
+func changePayload(userID string, st Status) []byte {
+	b, _ := json.Marshal(changeFrame{Type: "presence.changed", Data: changeData{UserID: userID, Status: st.String()}})
+	return b
+}
+
+// publishChange recomputes the user's effective status and publishes it to their
+// presence channel for any watching gateways to forward. Best-effort: a publish
+// failure must not fail the presence mutation that triggered it.
+func (s *RedisStore) publishChange(ctx context.Context, userID string) {
+	st, err := s.Effective(ctx, userID)
+	if err != nil {
+		return
+	}
+	_ = s.rdb.Publish(ctx, presenceChannel(userID), changePayload(userID, st)).Err()
 }
 
 func (s *RedisStore) Effective(ctx context.Context, userID string) (Status, error) {

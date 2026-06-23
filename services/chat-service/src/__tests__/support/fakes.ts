@@ -12,6 +12,8 @@ import type {
   MessageRepository,
 } from '../../application/ports/message-repository.js'
 import type { OutboundFrame, OutboundPublisher } from '../../application/ports/outbound-publisher.js'
+import type { ReceiptPointer, ReceiptRepository } from '../../application/ports/receipt-repository.js'
+import type { UserDirectory, UserProfile } from '../../application/ports/user-directory.js'
 
 /** Advanceable clock for deterministic timestamps. */
 export class FakeClock implements Clock {
@@ -65,6 +67,17 @@ export class InMemoryMessageRepository implements MessageRepository {
       .slice(0, opts.limit)
       .map((m) => ({ ...m }))
   }
+
+  async latestByConversations(conversationIds: string[]): Promise<Message[]> {
+    const ids = new Set(conversationIds)
+    const latest = new Map<string, Message>()
+    for (const m of this.rows) {
+      if (!ids.has(m.conversationId)) continue
+      const current = latest.get(m.conversationId)
+      if (!current || m.id > current.id) latest.set(m.conversationId, m)
+    }
+    return [...latest.values()].map((m) => ({ ...m }))
+  }
 }
 
 /**
@@ -74,6 +87,14 @@ export class InMemoryMessageRepository implements MessageRepository {
  */
 export class InMemoryConversationRepository implements ConversationRepository {
   private readonly byPair = new Map<string, Conversation>()
+
+  async listForUser(userId: string): Promise<Conversation[]> {
+    const out: Conversation[] = []
+    for (const c of this.byPair.values()) {
+      if (c.userA === userId || c.userB === userId) out.push({ ...c })
+    }
+    return out
+  }
 
   async findByPair(userA: string, userB: string): Promise<Conversation | null> {
     const c = this.byPair.get(`${userA}|${userB}`)
@@ -161,5 +182,58 @@ export class CapturingOutboundPublisher implements OutboundPublisher {
 export class FailingOutboundPublisher implements OutboundPublisher {
   async publishToUser(): Promise<void> {
     throw new Error('no subscriber')
+  }
+}
+
+/** In-memory receipt pointers, mirroring the GREATEST-advance repo (max, §4.7). */
+export class InMemoryReceiptRepository implements ReceiptRepository {
+  readonly rows = new Map<string, ReceiptPointer>()
+
+  async advance(
+    conversationId: string,
+    userId: string,
+    deliveredUpTo: string | null,
+    readUpTo: string | null,
+  ): Promise<ReceiptPointer> {
+    const key = `${conversationId}|${userId}`
+    const current = this.rows.get(key) ?? { userId, deliveredUpTo: null, readUpTo: null }
+    const next: ReceiptPointer = {
+      userId,
+      deliveredUpTo: maxId(current.deliveredUpTo, deliveredUpTo),
+      readUpTo: maxId(current.readUpTo, readUpTo),
+    }
+    this.rows.set(key, next)
+    return { ...next }
+  }
+
+  async listForConversation(conversationId: string): Promise<ReceiptPointer[]> {
+    const out: ReceiptPointer[] = []
+    for (const [key, pointer] of this.rows) {
+      if (key.startsWith(`${conversationId}|`)) out.push({ ...pointer })
+    }
+    return out
+  }
+}
+
+function maxId(a: string | null, b: string | null): string | null {
+  if (!a) return b
+  if (!b) return a
+  return b > a ? b : a
+}
+
+/** In-memory user directory (the shared `users` table) for display-name resolution. */
+export class InMemoryUserDirectory implements UserDirectory {
+  readonly profiles = new Map<string, UserProfile>()
+
+  async listProfiles(ids: string[]): Promise<UserProfile[]> {
+    return ids.flatMap((id) => {
+      const profile = this.profiles.get(id)
+      return profile ? [{ ...profile }] : []
+    })
+  }
+
+  /** Test helper: register a user's display name. */
+  add(id: string, displayName: string): void {
+    this.profiles.set(id, { id, displayName })
   }
 }

@@ -42,11 +42,8 @@ export function createSocialRoutes({ useCases, verifier }: SocialRoutesDeps) {
     .post("/requests", async ({ body, headers, set }) => {
       try {
         const me = await requireUser(headers.authorization, verifier);
-        const { addresseeId } = sendRequestSchema.parse(body);
-        const result = await useCases.sendFriendRequest.execute(
-          me,
-          addresseeId,
-        );
+        const { email } = sendRequestSchema.parse(body);
+        const result = await useCases.sendFriendRequest.execute(me, email);
         set.status = 201;
         return result;
       } catch (err) {

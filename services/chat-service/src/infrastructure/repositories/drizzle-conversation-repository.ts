@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or } from 'drizzle-orm'
 import type { Conversation } from '../../domain/conversation.js'
 import type { ConversationRepository } from '../../application/ports/conversation-repository.js'
 import type { Database } from '../db/client.js'
@@ -6,6 +6,14 @@ import { conversations, type ConversationRow } from '../db/schema.js'
 
 export function createDrizzleConversationRepository(db: Database): ConversationRepository {
   return {
+    async listForUser(userId: string): Promise<Conversation[]> {
+      const rows = await db
+        .select()
+        .from(conversations)
+        .where(or(eq(conversations.userA, userId), eq(conversations.userB, userId)))
+      return rows.map(toDomain)
+    },
+
     async findByPair(userA: string, userB: string): Promise<Conversation | null> {
       const [row] = await db
         .select()

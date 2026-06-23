@@ -9,9 +9,11 @@
  *   id + timestamp so the optimistic bubble reconciles (AC-M1/M3).
  * - `message.rejected` — a gated/invalid send bounced back to the sender so the
  *   optimistic bubble can show failed (AC-M2/M5).
+ * - `receipt.update` — the recipient's advanced delivered/read high-water marks,
+ *   pushed to the sender so it can recompute checkmarks (REQUIREMENTS §4).
  */
 export interface OutboundFrame {
-  type: 'message.received' | 'message.sent' | 'message.rejected'
+  type: 'message.received' | 'message.sent' | 'message.rejected' | 'receipt.update'
   data: Record<string, unknown>
 }
 

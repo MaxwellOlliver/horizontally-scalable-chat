@@ -1,6 +1,9 @@
 import type { Conversation } from '../../domain/conversation.js'
 
 export interface ConversationRepository {
+  /** Every conversation the user participates in (for the conversation list). */
+  listForUser(userId: string): Promise<Conversation[]>
+
   /** The conversation for a canonical pair, or null if none exists yet. */
   findByPair(userA: string, userB: string): Promise<Conversation | null>
 

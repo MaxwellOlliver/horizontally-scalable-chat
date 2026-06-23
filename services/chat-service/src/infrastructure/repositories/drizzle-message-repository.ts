@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt } from 'drizzle-orm'
 import type { Message } from '../../domain/message.js'
 import type {
   MessagePage,
@@ -47,6 +47,18 @@ export function createDrizzleMessageRepository(db: Database): MessageRepository 
         .where(and(...conditions))
         .orderBy(desc(messages.id)) // most-recent-first (AC-H1/H2)
         .limit(opts.limit)
+      return rows.map(toDomain)
+    },
+
+    async latestByConversations(conversationIds: string[]): Promise<Message[]> {
+      if (conversationIds.length === 0) return []
+      // DISTINCT ON (conversation_id) + ORDER BY id DESC => the newest message per
+      // conversation in one pass (uses the (conversation_id, id) index).
+      const rows = await db
+        .selectDistinctOn([messages.conversationId])
+        .from(messages)
+        .where(inArray(messages.conversationId, conversationIds))
+        .orderBy(messages.conversationId, desc(messages.id))
       return rows.map(toDomain)
     },
   }

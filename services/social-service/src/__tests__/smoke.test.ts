@@ -15,7 +15,7 @@ describe('smoke', () => {
     const b = await h.createUser()
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
     expect(res.status).toBe(201)
     expect(typeof res.body.requestId).toBe('string')

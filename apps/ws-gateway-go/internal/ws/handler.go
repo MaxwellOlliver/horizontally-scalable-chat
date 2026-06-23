@@ -39,13 +39,18 @@ type authFrame struct {
 	Token string `json:"token"`
 }
 
-// clientFrame is any post-auth message. `type` selects the handler; the message
-// fields are only read for `message.send` (the rest are presence signals).
+// clientFrame is any post-auth message. `type` selects the handler; the other
+// fields are read per type (`message.send` body, `presence.subscribe` userIds).
 type clientFrame struct {
-	Type        string `json:"type"`
-	ClientMsgID string `json:"clientMsgId"`
-	ToUserID    string `json:"toUserId"`
-	Body        string `json:"body"`
+	Type        string   `json:"type"`
+	ClientMsgID string   `json:"clientMsgId"`
+	ToUserID    string   `json:"toUserId"`
+	Body        string   `json:"body"`
+	UserIDs     []string `json:"userIds"`
+	// receipt fields
+	ConversationID string `json:"conversationId"`
+	DeliveredUpTo  string `json:"deliveredUpTo"`
+	ReadUpTo       string `json:"readUpTo"`
 }
 
 // serverFrame is the gateway's reply envelope (e.g. {"type":"auth_ok"}).
@@ -68,49 +73,61 @@ type Presence interface {
 }
 
 // Deliverer is the outbound side: it subscribes a connection to its user's
-// per-user channel and fans pushed frames back to it (delivery.Hub).
+// per-user channel and fans pushed frames back to it, and publishes frames to a
+// user's channel (for relaying ephemeral signals like typing). delivery.Hub.
 type Deliverer interface {
 	Register(userID string, c delivery.Conn)
 	Unregister(userID string, c delivery.Conn)
+	Publish(ctx context.Context, userID string, frame []byte) error
 }
 
-// Inbound is the inbound side: it enqueues a stamped `message.send` envelope onto
-// the chat-service work queue (inbound.RabbitPublisher).
+// Inbound is the inbound side: it enqueues stamped client messages and receipts
+// onto the chat-service work queue (inbound.RabbitPublisher).
 type Inbound interface {
 	Publish(env inbound.Envelope) error
+	PublishReceipt(env inbound.ReceiptEnvelope) error
+}
+
+// PresenceFeed lets a connection watch other users' presence (presence.Feed).
+type PresenceFeed interface {
+	Watch(ctx context.Context, userID string, sink presence.Sink)
+	Unwatch(userID string, sink presence.Sink)
 }
 
 // Handler upgrades HTTP requests to WebSocket connections and enforces the
 // handshake-auth protocol before registering them.
 type Handler struct {
-	verifier    Verifier
-	registry    *registry.Registry
-	presence    Presence
-	delivery    Deliverer
-	inbound     Inbound
-	authTimeout time.Duration
-	upgrader    websocket.Upgrader
+	verifier     Verifier
+	registry     *registry.Registry
+	presence     Presence
+	delivery     Deliverer
+	inbound      Inbound
+	presenceFeed PresenceFeed
+	authTimeout  time.Duration
+	upgrader     websocket.Upgrader
 }
 
 // NewHandler builds a Handler. The origin check is permissive here because TLS
-// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del` and
-// `in` are the messaging relay (outbound fan-out / inbound publish); either may
-// be nil to run the gateway without the chat path (e.g. presence-only tests).
+// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del`, `in`
+// and `feed` are the messaging relay + presence feed; any may be nil to run the
+// gateway without that path (e.g. presence-only tests).
 func NewHandler(
 	v Verifier,
 	reg *registry.Registry,
 	pres Presence,
 	del Deliverer,
 	in Inbound,
+	feed PresenceFeed,
 	authTimeout time.Duration,
 ) *Handler {
 	return &Handler{
-		verifier:    v,
-		registry:    reg,
-		presence:    pres,
-		delivery:    del,
-		inbound:     in,
-		authTimeout: authTimeout,
+		verifier:     v,
+		registry:     reg,
+		presence:     pres,
+		delivery:     del,
+		inbound:      in,
+		presenceFeed: feed,
+		authTimeout:  authTimeout,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
@@ -199,14 +216,20 @@ func (h *Handler) authenticate(conn *websocket.Conn) (userID string, closeCode i
 }
 
 // serve handles post-auth frames until the connection closes:
-//   - ping         -> pong + presence heartbeat (refresh TTL, §8.1)
-//   - focus        -> presence Online (§5.1)
-//   - blur         -> presence Idle
-//   - message.send -> stamp senderId, publish to the inbound work queue (§2.2)
+//   - ping              -> pong + presence heartbeat (refresh TTL, §8.1)
+//   - focus             -> presence Online (§5.1)
+//   - blur              -> presence Idle
+//   - message.send      -> stamp senderId, publish to the inbound work queue (§2.2)
+//   - presence.subscribe -> watch the listed users' presence (§5.4)
 //
 // Unknown frames are ignored.
 func (h *Handler) serve(c *connection, userID, connID string) {
 	ctx := context.Background()
+	// Users this connection is watching presence for (in this app, 0 or 1 — the
+	// open conversation's friend). Torn down on disconnect.
+	watched := map[string]struct{}{}
+	defer h.unwatchAll(watched, c)
+
 	for {
 		_, data, err := c.ws.ReadMessage()
 		if err != nil {
@@ -226,7 +249,99 @@ func (h *Handler) serve(c *connection, userID, connID string) {
 			logPresence("blur", h.presence.SetState(ctx, userID, connID, presence.Idle))
 		case "message.send":
 			h.publishInbound(userID, f)
+		case "presence.subscribe":
+			h.updateWatched(ctx, watched, c, f.UserIDs)
+		case "typing.start":
+			h.relayTyping(ctx, userID, f.ToUserID, true)
+		case "typing.stop":
+			h.relayTyping(ctx, userID, f.ToUserID, false)
+		case "receipt":
+			h.publishReceipt(userID, f)
 		}
+	}
+}
+
+// publishReceipt stamps the authenticated reporter onto a delivery/read receipt
+// and enqueues it for chat-service (REQUIREMENTS §4). Best-effort.
+func (h *Handler) publishReceipt(userID string, f clientFrame) {
+	if h.inbound == nil {
+		return
+	}
+	err := h.inbound.PublishReceipt(inbound.ReceiptEnvelope{
+		Type:           "receipt",
+		UserID:         userID, // never trust a client-supplied reporter
+		ConversationID: f.ConversationID,
+		DeliveredUpTo:  f.DeliveredUpTo,
+		ReadUpTo:       f.ReadUpTo,
+	})
+	if err != nil {
+		log.Printf("receipt publish failed for %s: %v", userID, err)
+	}
+}
+
+// typingFrame is the ephemeral signal forwarded to the conversation partner.
+type typingFrame struct {
+	Type string     `json:"type"`
+	Data typingData `json:"data"`
+}
+
+type typingData struct {
+	UserID string `json:"userId"`
+}
+
+// relayTyping forwards a typing signal to the recipient's per-user channel,
+// stamped with the authenticated sender (never client-supplied). Ephemeral and
+// best-effort: never persisted, never acked (REQUIREMENTS §6).
+func (h *Handler) relayTyping(ctx context.Context, from, to string, typing bool) {
+	if h.delivery == nil || to == "" {
+		return
+	}
+	frameType := "typing.stop"
+	if typing {
+		frameType = "typing.start"
+	}
+	payload, err := json.Marshal(typingFrame{Type: frameType, Data: typingData{UserID: from}})
+	if err != nil {
+		return
+	}
+	if err := h.delivery.Publish(ctx, to, payload); err != nil {
+		log.Printf("typing relay failed %s->%s: %v", from, to, err)
+	}
+}
+
+// updateWatched reconciles the connection's watched-user set against the
+// declarative `presence.subscribe` list — subscribing to the newly-listed users
+// and unsubscribing from the dropped ones.
+func (h *Handler) updateWatched(ctx context.Context, watched map[string]struct{}, c *connection, userIDs []string) {
+	if h.presenceFeed == nil {
+		return
+	}
+	next := make(map[string]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		if id != "" {
+			next[id] = struct{}{}
+		}
+	}
+	for id := range watched {
+		if _, keep := next[id]; !keep {
+			h.presenceFeed.Unwatch(id, c)
+			delete(watched, id)
+		}
+	}
+	for id := range next {
+		if _, have := watched[id]; !have {
+			h.presenceFeed.Watch(ctx, id, c)
+			watched[id] = struct{}{}
+		}
+	}
+}
+
+func (h *Handler) unwatchAll(watched map[string]struct{}, c *connection) {
+	if h.presenceFeed == nil {
+		return
+	}
+	for id := range watched {
+		h.presenceFeed.Unwatch(id, c)
 	}
 }
 

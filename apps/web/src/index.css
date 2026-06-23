@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+
+/*
+ * Relay design tokens — "citrus noir", dark only.
+ * Warm charcoal surfaces (never pure black, never blue/purple), one electric
+ * lime accent used sparingly. Generous radius, soft elevation. Geist Sans for
+ * UI/messages, Geist Mono for machine metadata (ids, timestamps, link state).
+ */
+@theme {
+  /* Surfaces — warm graphite. Panels sit only a hair above the page; depth
+     comes from hairlines + shadow, not brightness. */
+  --color-ink: #111110; /* page */
+  --color-panel: #181714; /* cards, columns */
+  --color-panel-2: #201e19; /* raised / hover */
+  --color-line: #2b2924; /* hairline borders, dividers */
+  --color-line-strong: #39362f; /* hover/active borders */
+
+  /* Foreground — warm bone white. */
+  --color-fg: #f0efe9;
+  --color-fg-muted: #a6a394;
+  --color-fg-faint: #726f5e;
+
+  /* Brand: one electric lime. Use sparingly. */
+  --color-accent: #cdf24a;
+  --color-accent-strong: #d8f15a;
+  --color-accent-2: #a6e635; /* deeper lime for the brand gradient */
+
+  /* Semantics. live = lime-green signal; everything else warm. */
+  --color-live: #8be04a;
+  --color-idle: #f0b429;
+  --color-down: #74715f;
+  --color-danger: #f2674e;
+
+  /* Generous, friendly radius. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
+
+  /* Soft elevation tuned for a warm dark surface. */
+  --shadow-soft: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 18px 40px -24px rgb(0 0 0 / 0.8);
+  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent),
+    0 18px 50px -22px color-mix(in oklab, var(--color-accent) 38%, transparent);
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    /* Quiet warm lift + a barely-there lime hint. Kept low so raised panels
+       don't look washed out. */
+    background-image:
+      radial-gradient(75% 55% at 12% -8%, rgb(255 247 230 / 0.035), transparent 60%),
+      radial-gradient(50% 42% at 100% 0%, color-mix(in oklab, var(--color-accent) 6%, transparent), transparent 55%);
+    background-attachment: fixed;
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 36%, transparent);
+    color: var(--color-fg);
+  }
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(100deg, var(--color-accent-strong), var(--color-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A raised dark card: a flat near-page panel defined by a hairline + soft
+   shadow. Stays dark — the separation is the border and shadow, not a lighter
+   fill. */
+@utility card {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-2xl);
+  background-color: var(--color-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Heartbeat tick on the live link indicator. Stilled for reduced motion. */
+@keyframes relay-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.relay-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: currentColor;
+  animation: relay-pulse 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relay-pulse::after {
+    animation: none;
+  }
+}
+
+/* Typing-indicator dots. */
+@keyframes typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}

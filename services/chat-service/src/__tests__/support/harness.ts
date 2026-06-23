@@ -14,6 +14,8 @@ import {
   InMemoryConversationRepository,
   InMemoryFriendsReadModel,
   InMemoryMessageRepository,
+  InMemoryReceiptRepository,
+  InMemoryUserDirectory,
   SequentialUuidGenerator,
 } from './fakes.js'
 
@@ -32,6 +34,7 @@ export interface RequestOptions {
 export interface TestUser {
   id: string
   token: string
+  displayName: string
 }
 
 /** A `message.send` envelope as the gateway would publish it (senderId stamped). */
@@ -48,13 +51,22 @@ export interface Harness {
   conversations: InMemoryConversationRepository
   friends: InMemoryFriendsReadModel
   outbound: CapturingOutboundPublisher
+  users: InMemoryUserDirectory
+  receipts: InMemoryReceiptRepository
   clock: FakeClock
   ids: SequentialUuidGenerator
-  /** Mints a valid token + id for a user. */
-  createUser: () => Promise<TestUser>
+  /** Mints a valid token + id for a user and registers their display name. */
+  createUser: (displayName?: string) => Promise<TestUser>
   tokenFor: (userId: string) => Promise<string>
   /** Drives the inbound work-queue handler with a raw envelope (the real send path). */
   send: (envelope: SendEnvelope) => Promise<void>
+  /** Drives the inbound handler with a `receipt` envelope (the real receipt path). */
+  receipt: (envelope: {
+    userId: string
+    conversationId: string
+    deliveredUpTo?: string
+    readUpTo?: string
+  }) => Promise<void>
   /** Drives the `domain.events` handler with a raw friend event (the real event path). */
   deliverFriendEvent: (event: Record<string, unknown>) => Promise<void>
   /** Convenience: emit a well-formed `friend_request.accepted`. */
@@ -80,6 +92,8 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
   const conversations = new InMemoryConversationRepository()
   const friends = new InMemoryFriendsReadModel()
   const outbound = new CapturingOutboundPublisher()
+  const users = new InMemoryUserDirectory()
+  const receipts = new InMemoryReceiptRepository()
   const clock = new FakeClock()
   const ids = new SequentialUuidGenerator()
 
@@ -88,6 +102,8 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
     conversations,
     friends,
     outbound: overrides.outbound ?? outbound,
+    users,
+    receipts,
     ids,
     clock,
   }
@@ -98,6 +114,7 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
 
   const inboundHandler = createInboundHandler({
     sendMessage: useCases.sendMessage,
+    recordReceipt: useCases.recordReceipt,
     outbound: overrides.outbound ?? outbound,
   })
   const friendEventHandler = createFriendEventHandler({
@@ -115,13 +132,23 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
       .setExpirationTime('10m')
       .sign(key)
 
-  const createUser = async (): Promise<TestUser> => {
+  let userCount = 0
+  const createUser = async (displayName?: string): Promise<TestUser> => {
     const id = uuidv7()
-    return { id, token: await tokenFor(id) }
+    const name = displayName ?? `User ${(userCount += 1)}`
+    users.add(id, name)
+    return { id, token: await tokenFor(id), displayName: name }
   }
 
   const send = (envelope: SendEnvelope): Promise<void> =>
     inboundHandler({ type: 'message.send', ...envelope })
+
+  const receipt = (envelope: {
+    userId: string
+    conversationId: string
+    deliveredUpTo?: string
+    readUpTo?: string
+  }): Promise<void> => inboundHandler({ type: 'receipt', ...envelope })
 
   const deliverFriendEvent = (event: Record<string, unknown>): Promise<void> =>
     friendEventHandler(event)
@@ -169,11 +196,14 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
     conversations,
     friends,
     outbound,
+    users,
+    receipts,
     clock,
     ids,
     createUser,
     tokenFor,
     send,
+    receipt,
     deliverFriendEvent,
     acceptFriends,
     removeFriends,

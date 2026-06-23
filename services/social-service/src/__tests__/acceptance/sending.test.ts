@@ -14,7 +14,7 @@ describe('Sending a friend request', () => {
 
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
 
     expect(res.status).toBe(201)
@@ -28,7 +28,7 @@ describe('Sending a friend request', () => {
 
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: a.id },
+      body: { email: a.email },
     })
 
     expect(res.status).toBe(422)
@@ -45,7 +45,7 @@ describe('Sending a friend request', () => {
 
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
 
     expect(res.status).toBe(409)
@@ -55,11 +55,11 @@ describe('Sending a friend request', () => {
   it('AC-S4: rejects a duplicate pending request (same direction) with 409', async () => {
     const a = await h.createUser()
     const b = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { addresseeId: b.id } })
+    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: b.email } })
 
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
 
     expect(res.status).toBe(409)
@@ -74,12 +74,12 @@ describe('Sending a friend request', () => {
     // B asks A first.
     const first = await h.request('POST', '/social/friends/requests', {
       token: b.token,
-      body: { addresseeId: a.id },
+      body: { email: a.email },
     })
     // A asks B back: mutual intent ⇒ accept the existing request.
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
 
     expect(res.status).toBe(201)
@@ -94,10 +94,10 @@ describe('Sending a friend request', () => {
   it('AC-S6: rejects a request to a non-existent addressee with 404', async () => {
     const a = await h.createUser()
 
-    // A syntactically valid UUID that was never registered in the directory.
+    // A well-formed email that no user registered with.
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: '11111111-1111-7111-8111-111111111111' },
+      body: { email: 'nobody@test.dev' },
     })
 
     expect(res.status).toBe(404)
@@ -109,7 +109,7 @@ describe('Sending a friend request', () => {
     const b = await h.createUser()
     const first = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
     // B rejects.
     const rejected = await h.request('POST', `/social/friends/requests/${first.body.requestId}/reject`, {
@@ -120,7 +120,7 @@ describe('Sending a friend request', () => {
     // A may send again.
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
     expect(res.status).toBe(201)
     expect(res.body.status).toBe('pending')

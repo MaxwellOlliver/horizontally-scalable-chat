@@ -12,7 +12,7 @@ describe('Friendship & lists', () => {
   async function befriend(a: TestUser, b: TestUser): Promise<void> {
     const sent = await h.request('POST', '/social/friends/requests', {
       token: a.token,
-      body: { addresseeId: b.id },
+      body: { email: b.email },
     })
     await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, { token: b.token })
   }
@@ -63,7 +63,7 @@ describe('Friendship & lists', () => {
   it('AC-F3: lists incoming and outgoing pending requests independently', async () => {
     const a = await h.createUser()
     const b = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { addresseeId: b.id } })
+    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: b.email } })
 
     const outgoing = await h.request('GET', '/social/friends/requests?direction=outgoing', {
       token: a.token,

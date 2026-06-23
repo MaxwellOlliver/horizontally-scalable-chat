@@ -19,19 +19,24 @@ export interface SendFriendRequestDeps extends AcceptPendingDeps {
 }
 
 /**
- * SendFriendRequest (AC-S1..S7). Validates the request, and — if the addressee
- * has already sent a pending request the other way — accepts that instead of
- * creating a new one (mutual intent ⇒ friendship, AC-S5).
+ * SendFriendRequest (AC-S1..S7). The addressee is identified by EMAIL — the only
+ * handle a person knows about a friend — which we resolve to a user here (an
+ * unknown email is a 404, AC-S6). If the addressee has already sent a pending
+ * request the other way, we accept that instead of creating a new one (mutual
+ * intent ⇒ friendship, AC-S5).
  */
 export class SendFriendRequest {
   constructor(private readonly deps: SendFriendRequestDeps) {}
 
-  async execute(requesterId: string, addresseeId: string): Promise<SendFriendRequestResult> {
+  async execute(requesterId: string, addresseeEmail: string): Promise<SendFriendRequestResult> {
+    const addressee = await this.deps.users.findByEmail(addresseeEmail)
+    if (!addressee) {
+      throw new AddresseeNotFoundError() // AC-S6
+    }
+    const addresseeId = addressee.id
+
     if (requesterId === addresseeId) {
       throw new SelfRequestError() // AC-S2
-    }
-    if (!(await this.deps.users.exists(addresseeId))) {
-      throw new AddresseeNotFoundError() // AC-S6
     }
     if (await this.deps.friendships.areFriends(requesterId, addresseeId)) {
       throw new AlreadyFriendsError() // AC-S3

@@ -61,8 +61,8 @@ export function assembleUseCases(ports: SocialPorts): SocialUseCases {
     ),
     removeFriend: new RemoveFriend(acceptDeps),
     areFriends: new AreFriends(ports.friendships),
-    listFriends: new ListFriends(ports.friendships),
-    listPendingRequests: new ListPendingRequests(ports.friendRequests),
+    listFriends: new ListFriends(ports.friendships, ports.users),
+    listPendingRequests: new ListPendingRequests(ports.friendRequests, ports.users),
   };
 }
 

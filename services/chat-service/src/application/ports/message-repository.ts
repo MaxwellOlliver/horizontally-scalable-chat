@@ -20,4 +20,10 @@ export interface MessageRepository {
    * `before` is an exclusive cursor for keyset pagination.
    */
   page(conversationId: string, opts: MessagePage): Promise<Message[]>
+
+  /**
+   * The latest message in each of the given conversations (one row per
+   * conversation that has any), for conversation-list previews.
+   */
+  latestByConversations(conversationIds: string[]): Promise<Message[]>
 }

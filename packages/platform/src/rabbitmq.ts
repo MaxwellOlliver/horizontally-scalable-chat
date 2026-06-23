@@ -25,12 +25,24 @@ export function createRabbitMqTopicPublisher(config: RabbitMqTopicConfig): Topic
   let setup: Promise<{ conn: ChannelModel; channel: Channel }> | null = null
 
   async function channel(): Promise<Channel> {
-    setup ??= (async () => {
-      const conn = await connect(config.url)
-      const channel = await conn.createChannel()
-      await channel.assertExchange(config.exchange, 'topic', { durable: true })
-      return { conn, channel }
-    })()
+    if (!setup) {
+      setup = (async () => {
+        const conn = await connect(config.url)
+        // A dropped connection resets the cache so the next publish reconnects.
+        conn.on('error', () => {})
+        conn.on('close', () => {
+          setup = null
+        })
+        const channel = await conn.createChannel()
+        await channel.assertExchange(config.exchange, 'topic', { durable: true })
+        return { conn, channel }
+      })().catch((err) => {
+        // Don't cache a rejected setup (e.g. broker not up yet): reset so the
+        // next publish retries instead of failing for the process's lifetime.
+        setup = null
+        throw err
+      })
+    }
     return (await setup).channel
   }
 
@@ -124,38 +136,82 @@ export function createRabbitMqTopicConsumer(config: RabbitMqTopicConsumerConfig)
   })
 }
 
+const RECONNECT_BASE_MS = 1000
+const RECONNECT_MAX_MS = 30000
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
- * Shared consumer plumbing: lazily connect, run `topology` to declare/bind and
- * return the queue to read, set prefetch, then ack-on-success / nack-on-throw.
+ * Shared consumer plumbing: connect, run `topology` to declare/bind and return
+ * the queue to read, set prefetch, then ack-on-success / nack-on-throw.
  * Malformed (non-JSON) bodies are acked and dropped — they can never succeed.
+ *
+ * Connecting is resilient: the broker is routinely not-yet-ready at startup (or
+ * restarts/deploys), so `start()` kicks off a retry-with-backoff loop and
+ * returns immediately rather than throwing — a refused connection must not crash
+ * the service. When an established connection drops, it reconnects and resumes
+ * consuming.
  */
 function createConsumer(
   url: string,
   prefetch: number,
   topology: (channel: Channel) => Promise<string>,
 ): RabbitMqConsumer {
-  let setup: Promise<{ conn: ChannelModel; channel: Channel }> | null = null
+  let handler: RabbitMqHandler | null = null
+  let conn: ChannelModel | null = null
+  let started = false
+  let closed = false
+
+  async function connectOnce(): Promise<void> {
+    const c = await connect(url)
+    const channel = await c.createChannel()
+    const queue = await topology(channel)
+    await channel.prefetch(prefetch)
+    await channel.consume(queue, (msg) => {
+      if (!msg || !handler) return // consumer cancelled by the broker
+      void dispatch(channel, handler, msg)
+    })
+    conn = c
+    // amqplib emits 'close' (after 'error'); reconnect unless we asked to stop.
+    c.on('error', () => {})
+    c.on('close', () => {
+      conn = null
+      if (!closed) void runConnectLoop()
+    })
+    console.log('[platform] rabbitmq consumer connected')
+  }
+
+  async function runConnectLoop(): Promise<void> {
+    let attempt = 0
+    while (!closed) {
+      try {
+        await connectOnce()
+        return
+      } catch (err) {
+        attempt += 1
+        const delay = Math.min(RECONNECT_BASE_MS * 2 ** Math.min(attempt - 1, 5), RECONNECT_MAX_MS)
+        const reason = err instanceof Error ? err.message : String(err)
+        console.error(
+          `[platform] rabbitmq consumer connect failed (attempt ${attempt}); retrying in ${delay}ms: ${reason}`,
+        )
+        await sleep(delay)
+      }
+    }
+  }
 
   return {
-    async start(handler: RabbitMqHandler): Promise<void> {
-      if (setup) return
-      setup = (async () => {
-        const conn = await connect(url)
-        const channel = await conn.createChannel()
-        const queue = await topology(channel)
-        await channel.prefetch(prefetch)
-        await channel.consume(queue, (msg) => {
-          if (!msg) return // consumer cancelled by the broker
-          void dispatch(channel, handler, msg)
-        })
-        return { conn, channel }
-      })()
-      await setup
+    async start(h: RabbitMqHandler): Promise<void> {
+      handler = h
+      if (started) return
+      started = true
+      void runConnectLoop() // fire-and-forget: don't block startup on the broker
     },
     async close(): Promise<void> {
-      if (setup) {
-        const { conn } = await setup
-        await conn.close()
+      closed = true
+      if (conn) {
+        const c = conn
+        conn = null
+        await c.close().catch(() => {})
       }
     },
   }

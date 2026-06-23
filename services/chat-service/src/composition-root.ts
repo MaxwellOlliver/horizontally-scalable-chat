@@ -14,11 +14,19 @@ import type { ConversationRepository } from './application/ports/conversation-re
 import type { FriendsReadModel } from './application/ports/friends-read-model.js'
 import type { MessageRepository } from './application/ports/message-repository.js'
 import type { OutboundPublisher } from './application/ports/outbound-publisher.js'
+import type { ReceiptRepository } from './application/ports/receipt-repository.js'
+import type { UserDirectory } from './application/ports/user-directory.js'
 import { ApplyFriendAccepted } from './application/use-cases/apply-friend-accepted.js'
 import { ApplyFriendRemoved } from './application/use-cases/apply-friend-removed.js'
 import { GetHistory } from './application/use-cases/get-history.js'
+import { GetReceipts } from './application/use-cases/get-receipts.js'
+import { ListConversations } from './application/use-cases/list-conversations.js'
+import { RecordReceipt } from './application/use-cases/record-receipt.js'
+import { ResolveConversation } from './application/use-cases/resolve-conversation.js'
 import { SendMessage } from './application/use-cases/send-message.js'
 import { createDatabase, type Database } from './infrastructure/db/client.js'
+import { createDrizzleUserDirectory } from './infrastructure/directory/drizzle-user-directory.js'
+import { createDrizzleReceiptRepository } from './infrastructure/repositories/drizzle-receipt-repository.js'
 import {
   createRedisOutboundPublisher,
   type ClosableOutboundPublisher,
@@ -36,6 +44,8 @@ export interface ChatPorts {
   conversations: ConversationRepository
   friends: FriendsReadModel
   outbound: OutboundPublisher
+  users: UserDirectory
+  receipts: ReceiptRepository
   ids: IdGenerator
   clock: Clock
 }
@@ -43,6 +53,7 @@ export interface ChatPorts {
 /** The full use-case surface — HTTP (`getHistory`) plus the queue-driven workers. */
 export interface ChatApplication extends ChatUseCases {
   sendMessage: SendMessage
+  recordReceipt: RecordReceipt
   applyFriendAccepted: ApplyFriendAccepted
   applyFriendRemoved: ApplyFriendRemoved
 }
@@ -63,6 +74,10 @@ export function assembleUseCases(ports: ChatPorts): ChatApplication {
       clock: ports.clock,
     }),
     getHistory: new GetHistory(ports.conversations, ports.messages),
+    listConversations: new ListConversations(ports.conversations, ports.messages, ports.users),
+    resolveConversation: new ResolveConversation(ports.conversations, ports.users),
+    getReceipts: new GetReceipts(ports.conversations, ports.receipts),
+    recordReceipt: new RecordReceipt(ports.conversations, ports.receipts, ports.outbound, ports.clock),
     applyFriendAccepted: new ApplyFriendAccepted(ports.friends, ports.conversations),
     applyFriendRemoved: new ApplyFriendRemoved(ports.friends, ports.conversations),
   }
@@ -87,6 +102,8 @@ export function createContainer(env: Env): Container {
     conversations: createDrizzleConversationRepository(db),
     friends: createDrizzleFriendsReadModel(db),
     outbound,
+    users: createDrizzleUserDirectory(db),
+    receipts: createDrizzleReceiptRepository(db),
     ids: uuidv7Generator,
     clock: systemClock,
   })
@@ -104,7 +121,11 @@ export function createContainer(env: Env): Container {
     patterns: ['friend_request.accepted', 'friendship.removed'],
   })
 
-  const inboundHandler = createInboundHandler({ sendMessage: useCases.sendMessage, outbound })
+  const inboundHandler = createInboundHandler({
+    sendMessage: useCases.sendMessage,
+    recordReceipt: useCases.recordReceipt,
+    outbound,
+  })
   const friendEventHandler = createFriendEventHandler({
     applyFriendAccepted: useCases.applyFriendAccepted,
     applyFriendRemoved: useCases.applyFriendRemoved,

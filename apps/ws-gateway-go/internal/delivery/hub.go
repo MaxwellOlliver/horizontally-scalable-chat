@@ -47,6 +47,13 @@ func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{rdb: rdb, groups: make(map[string]*group)}
 }
 
+// Publish sends a frame to a user's channel (cross-instance). The recipient's
+// hub forwards it to their sockets — used to relay ephemeral signals like typing
+// to the conversation partner. (Durable frames are published by chat-service.)
+func (h *Hub) Publish(ctx context.Context, userID string, frame []byte) error {
+	return h.rdb.Publish(ctx, userChannel(userID), frame).Err()
+}
+
 // Register adds a connection for userID, subscribing to their channel on the
 // first connection (spec §2.3: subscribe per held connection, once per user).
 func (h *Hub) Register(userID string, c Conn) {

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -21,6 +23,14 @@ import (
 )
 
 func main() {
+	// `ws-gateway-go -healthcheck` probes /health and exits 0/1. This is the
+	// container HEALTHCHECK: the distroless image has no shell or curl, so the
+	// binary health-checks itself.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		runHealthcheck()
+		return
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
@@ -43,8 +53,11 @@ func main() {
 	// Inbound: stamp + publish client `message.send` to the work queue (spec §2.2).
 	inboundPublisher := inbound.NewRabbitPublisher(cfg.RabbitMQURL, cfg.InboundQueue)
 	defer func() { _ = inboundPublisher.Close() }()
+	// Presence feed: forward watched friends' status to interested sockets (§5.4).
+	presenceFeed := presence.NewFeed(rdb, presenceStore)
+	defer presenceFeed.Close()
 
-	handler := ws.NewHandler(verifier, reg, presenceStore, deliveryHub, inboundPublisher, cfg.AuthTimeout)
+	handler := ws.NewHandler(verifier, reg, presenceStore, deliveryHub, inboundPublisher, presenceFeed, cfg.AuthTimeout)
 
 	mux := http.NewServeMux()
 	mux.Handle("/ws", handler)
@@ -77,4 +90,22 @@ func presenceReadHandler(store presence.Store) http.HandlerFunc {
 func writeJSON(w http.ResponseWriter, body any) {
 	w.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// runHealthcheck GETs the local /health and exits non-zero on any failure, for
+// the container HEALTHCHECK.
+func runHealthcheck() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/health")
+	if err != nil {
+		os.Exit(1)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		os.Exit(1)
+	}
 }

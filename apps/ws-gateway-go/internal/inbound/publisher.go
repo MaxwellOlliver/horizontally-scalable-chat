@@ -24,9 +24,21 @@ type Envelope struct {
 	Body        string `json:"body"`
 }
 
+// ReceiptEnvelope is a delivery/read receipt the recipient reports, stamped with
+// their authenticated UserID. Shares the inbound queue; chat-service routes by
+// `type`. Empty pointers are omitted (the receipt may carry only one).
+type ReceiptEnvelope struct {
+	Type           string `json:"type"` // "receipt"
+	UserID         string `json:"userId"`
+	ConversationID string `json:"conversationId"`
+	DeliveredUpTo  string `json:"deliveredUpTo,omitempty"`
+	ReadUpTo       string `json:"readUpTo,omitempty"`
+}
+
 // Publisher hands a stamped envelope to the inbound queue.
 type Publisher interface {
 	Publish(env Envelope) error
+	PublishReceipt(env ReceiptEnvelope) error
 }
 
 // RabbitPublisher publishes persistent JSON to a durable work queue via the
@@ -46,10 +58,15 @@ func NewRabbitPublisher(url, queue string) *RabbitPublisher {
 	return &RabbitPublisher{url: url, queue: queue}
 }
 
-// Publish stamps and enqueues an envelope. It (re)connects on demand so a broker
-// restart self-heals on the next send.
-func (p *RabbitPublisher) Publish(env Envelope) error {
-	body, err := json.Marshal(env)
+// Publish enqueues a client message. (Re)connects on demand so a broker restart
+// self-heals on the next send.
+func (p *RabbitPublisher) Publish(env Envelope) error { return p.publish(env) }
+
+// PublishReceipt enqueues a delivery/read receipt onto the same queue.
+func (p *RabbitPublisher) PublishReceipt(env ReceiptEnvelope) error { return p.publish(env) }
+
+func (p *RabbitPublisher) publish(payload any) error {
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}

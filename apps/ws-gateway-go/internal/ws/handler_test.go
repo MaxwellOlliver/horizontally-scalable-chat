@@ -54,6 +54,8 @@ func (s *stubInbound) Publish(env inbound.Envelope) error {
 	return nil
 }
 
+func (s *stubInbound) PublishReceipt(inbound.ReceiptEnvelope) error { return nil }
+
 func (s *stubInbound) all() []inbound.Envelope {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -76,7 +78,8 @@ func newRig(t *testing.T, authTimeout time.Duration) *testRig {
 	t.Cleanup(hub.Close)
 	in := &stubInbound{}
 
-	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, hub, in, authTimeout)
+	feed := presence.NewFeed(rdb, pres)
+	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, hub, in, feed, authTimeout)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return &testRig{
