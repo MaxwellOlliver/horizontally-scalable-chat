@@ -5,9 +5,12 @@ import { createContainer } from './composition-root.js'
 const env = loadEnv()
 const container = createContainer(env)
 
-const app = createApp(container.useCases, container.verifier).listen(env.PORT, () => {
-  console.log(`👥 social-service listening on port ${env.PORT}`)
-})
+const app = createApp(container.useCases, container.verifier, container.logger).listen(
+  env.PORT,
+  () => {
+    console.log(`👥 social-service listening on port ${env.PORT}`)
+  },
+)
 
 let shuttingDown = false
 const shutdown = async () => {

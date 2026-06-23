@@ -79,7 +79,7 @@ func newRig(t *testing.T, authTimeout time.Duration) *testRig {
 	in := &stubInbound{}
 
 	feed := presence.NewFeed(rdb, pres)
-	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, hub, in, feed, authTimeout)
+	h := NewHandler(auth.NewVerifier(testSecret, testIssuer), reg, pres, hub, in, feed, nil, authTimeout)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return &testRig{

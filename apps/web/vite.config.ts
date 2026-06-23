@@ -4,16 +4,17 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // Dev server proxies the API + WS upgrade to the backend so the client speaks
-// same-origin (no CORS) and the WS handshake lands on the gateway. Target
-// defaults to the Nginx front door; override with VITE_PROXY_TARGET.
-//
-// NOTE: Nginx currently routes /auth, /ws, /presence. /social and /chat still
-// need upstreams added before the friends/chat screens can reach them.
+// same-origin (no CORS). Everything the backend serves lives under a single
+// `/api` prefix that the proxy STRIPS before forwarding — so the SPA owns the
+// rest of the path space (notably its own /chat/* router routes) without
+// colliding with the chat-service API. Nginx is unchanged: it still sees
+// /auth, /chat, /ws at the root. Target defaults to the Nginx front door;
+// override with VITE_PROXY_TARGET.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.VITE_PROXY_TARGET || 'http://localhost:8080'
   const wsTarget = target.replace(/^http/, 'ws')
-  const http = { target, changeOrigin: true }
+  const stripApi = (p: string) => p.replace(/^\/api/, '')
 
   return {
     // tanstackRouter must come before the React plugin (it generates the route
@@ -24,13 +25,15 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
     ],
     server: {
+      // Bind all interfaces (not just 127.0.0.1) so the dev server is reachable
+      // from the Windows host across the WSL2 boundary — loopback-only binds are
+      // not reliably forwarded.
+      host: true,
       port: 5173,
       proxy: {
-        '/auth': http,
-        '/social': http,
-        '/chat': http,
-        '/presence': http,
-        '/ws': { target: wsTarget, ws: true, changeOrigin: true },
+        // /api/ws must precede /api so the WebSocket upgrade rule wins the match.
+        '/api/ws': { target: wsTarget, ws: true, changeOrigin: true, rewrite: stripApi },
+        '/api': { target, changeOrigin: true, rewrite: stripApi },
       },
     },
   }

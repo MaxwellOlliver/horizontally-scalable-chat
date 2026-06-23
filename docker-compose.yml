@@ -14,6 +14,18 @@ name: hsc-relay
 # before it boots. The shared JWT secret + issuer reach every service from one
 # source (.env) — the cross-language contract that lets the gateway verify
 # tokens locally (specs/auth.spec.md §2.8). See .env.example.
+#
+# HORIZONTAL SCALING (the point of this project). The app tiers and gateway are
+# stateless and use `expose` (no host port) + no container_name, so they scale:
+#
+#   docker compose up -d --build --scale chat-service=3 --scale ws-gateway-go=2
+#
+# Each replica derives a distinct instance id from its container hostname
+# (@hsc/platform resolveInstanceId / logstream.ResolveInstanceID), surfaced in
+# the client's activity log. nginx round-robins the HTTP tiers and least_conn's
+# the gateway (infra/nginx/nginx.conf); the chat work queue load-balances via
+# competing consumers; cross-instance delivery rides Redis pub/sub. Bring the
+# replica set up together — nginx resolves the gateway pool once at boot.
 
 x-postgres-url: &postgres-url
   postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hsc}
@@ -137,8 +149,12 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-hsc-auth}
       ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-600}
       REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-1296000}
+      # Observability log stream — publishes per-user log frames the gateway relays.
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate-auth:
         condition: service_completed_successfully

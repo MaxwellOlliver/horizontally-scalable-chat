@@ -1,7 +1,10 @@
 import {
   createJwtAccessTokenVerifier,
+  createLogger,
   createRabbitMqTopicConsumer,
   createRabbitMqWorkQueueConsumer,
+  createRedisPublisher,
+  resolveInstanceId,
   systemClock,
   uuidv7Generator,
   type AccessTokenVerifier,
@@ -97,6 +100,15 @@ export function createContainer(env: Env): Container {
   const db = createDatabase(env.DATABASE_URL)
   const outbound: ClosableOutboundPublisher = createRedisOutboundPublisher(env.REDIS_URL)
 
+  // Observability log stream — tags work with this instance's id and ships it to
+  // the affected users over the same Redis → gateway path as domain frames.
+  const logPublisher = createRedisPublisher(env.REDIS_URL)
+  const logger = createLogger({
+    instanceId: resolveInstanceId('chat-service'),
+    source: 'chat-service',
+    publish: (channel, message) => logPublisher.publish(channel, message),
+  })
+
   const useCases = assembleUseCases({
     messages: createDrizzleMessageRepository(db),
     conversations: createDrizzleConversationRepository(db),
@@ -125,6 +137,7 @@ export function createContainer(env: Env): Container {
     sendMessage: useCases.sendMessage,
     recordReceipt: useCases.recordReceipt,
     outbound,
+    logger,
   })
   const friendEventHandler = createFriendEventHandler({
     applyFriendAccepted: useCases.applyFriendAccepted,
@@ -144,6 +157,7 @@ export function createContainer(env: Env): Container {
         inboundConsumer.close(),
         friendEventsConsumer.close(),
         outbound.close(),
+        logPublisher.close(),
         db.close(),
       ])
     },

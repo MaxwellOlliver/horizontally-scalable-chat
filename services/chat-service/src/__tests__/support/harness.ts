@@ -78,6 +78,15 @@ export interface Harness {
   /** Convenience: emit a well-formed `friendship.removed`. */
   removeFriends: (x: string, y: string, eventId?: string) => Promise<void>
   request: (method: string, path: string, opts?: RequestOptions) => Promise<TestResponse>
+  /** Observability log lines captured from the inbound handler. */
+  logs: LogCapture[]
+}
+
+/** One captured log emission (resolved to an array of target users). */
+export interface LogCapture {
+  userIds: string[]
+  event: string
+  detail?: Record<string, unknown>
 }
 
 /**
@@ -96,6 +105,7 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
   const receipts = new InMemoryReceiptRepository()
   const clock = new FakeClock()
   const ids = new SequentialUuidGenerator()
+  const logs: LogCapture[] = []
 
   const ports: ChatPorts = {
     messages,
@@ -116,6 +126,10 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
     sendMessage: useCases.sendMessage,
     recordReceipt: useCases.recordReceipt,
     outbound: overrides.outbound ?? outbound,
+    logger: {
+      emit: (userIds, event, detail) =>
+        logs.push({ userIds: typeof userIds === 'string' ? [userIds] : [...userIds], event, detail }),
+    },
   })
   const friendEventHandler = createFriendEventHandler({
     applyFriendAccepted: useCases.applyFriendAccepted,
@@ -208,6 +222,7 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
     acceptFriends,
     removeFriends,
     request,
+    logs,
   }
 }
 

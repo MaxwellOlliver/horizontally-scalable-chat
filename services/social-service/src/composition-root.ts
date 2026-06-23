@@ -21,7 +21,14 @@ import { createRabbitMqDomainEventPublisher } from "./infrastructure/messaging/r
 import { createRedisLivePush } from "./infrastructure/realtime/redis-live-push.js";
 import { createDrizzleFriendRequestRepository } from "./infrastructure/repositories/drizzle-friend-request-repository.js";
 import { createDrizzleFriendshipRepository } from "./infrastructure/repositories/drizzle-friendship-repository.js";
-import { createJwtAccessTokenVerifier, uuidv7Generator } from "@hsc/platform";
+import {
+  createJwtAccessTokenVerifier,
+  createLogger,
+  createRedisPublisher,
+  resolveInstanceId,
+  uuidv7Generator,
+  type LogEmitter,
+} from "@hsc/platform";
 import type { SocialUseCases } from "./interface/http/routes/social.js";
 
 /** Everything the use-case layer depends on, as ports (clean-arch boundary). */
@@ -69,6 +76,7 @@ export function assembleUseCases(ports: SocialPorts): SocialUseCases {
 export interface Container {
   useCases: SocialUseCases;
   verifier: AccessTokenVerifier;
+  logger: LogEmitter;
   db: Database;
   close(): Promise<void>;
 }
@@ -81,6 +89,12 @@ export function createContainer(env: Env): Container {
     exchange: env.DOMAIN_EVENTS_EXCHANGE,
   });
   const livePush = createRedisLivePush(env.REDIS_URL);
+  const logPublisher = createRedisPublisher(env.REDIS_URL);
+  const logger = createLogger({
+    instanceId: resolveInstanceId("social-service"),
+    source: "social-service",
+    publish: (channel, message) => logPublisher.publish(channel, message),
+  });
 
   const useCases = assembleUseCases({
     friendRequests: createDrizzleFriendRequestRepository(db),
@@ -95,9 +109,15 @@ export function createContainer(env: Env): Container {
   return {
     useCases,
     verifier: createJwtAccessTokenVerifier(env.JWT_SECRET, env.JWT_ISSUER),
+    logger,
     db,
     close: async () => {
-      await Promise.allSettled([db.close(), events.close(), livePush.close()]);
+      await Promise.allSettled([
+        db.close(),
+        events.close(),
+        livePush.close(),
+        logPublisher.close(),
+      ]);
     },
   };
 }

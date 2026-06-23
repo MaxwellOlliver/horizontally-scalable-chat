@@ -9,6 +9,8 @@ import { z } from "zod";
  */
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
+  // Observability log stream — publishes per-user log frames the gateway relays.
+  REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 chars"),
   JWT_ISSUER: z.string().min(1).default("hsc-auth"),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(600),

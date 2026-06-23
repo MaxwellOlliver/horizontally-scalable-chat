@@ -21,6 +21,13 @@ export interface Harness {
   clock: FakeClock
   tokenIssuer: TokenIssuer
   request: (method: string, path: string, body?: unknown) => Promise<TestResponse>
+  /** Observability log lines captured from the routes. */
+  logs: LogCapture[]
+}
+
+export interface LogCapture {
+  userIds: string[]
+  event: string
 }
 
 export interface TestResponse {
@@ -55,7 +62,11 @@ export function buildHarness(): Harness {
     dummyHash: 'fakehash:__dummy__',
   }
 
-  const app = createApp(assembleUseCases(ports))
+  const logs: LogCapture[] = []
+  const app = createApp(assembleUseCases(ports), {
+    emit: (userIds, event) =>
+      logs.push({ userIds: typeof userIds === 'string' ? [userIds] : [...userIds], event }),
+  })
 
   const request = async (method: string, path: string, body?: unknown): Promise<TestResponse> => {
     const res = await app.handle(
@@ -69,7 +80,7 @@ export function buildHarness(): Harness {
     return { status: res.status, body: text ? safeJson(text) : null }
   }
 
-  return { app, users, refreshTokens, clock, tokenIssuer, request }
+  return { app, users, refreshTokens, clock, tokenIssuer, request, logs }
 }
 
 function safeJson(text: string): unknown {

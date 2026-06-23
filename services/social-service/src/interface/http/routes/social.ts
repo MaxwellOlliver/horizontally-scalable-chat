@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import type { LogEmitter } from "@hsc/platform";
 import type { AccessTokenVerifier } from "../../../application/ports/access-token-verifier.js";
 import type { AcceptFriendRequest } from "../../../application/use-cases/accept-friend-request.js";
 import type { AreFriends } from "../../../application/use-cases/are-friends.js";
@@ -29,6 +30,7 @@ export interface SocialUseCases {
 export interface SocialRoutesDeps {
   useCases: SocialUseCases;
   verifier: AccessTokenVerifier;
+  logger: LogEmitter;
 }
 
 /**
@@ -37,13 +39,22 @@ export interface SocialRoutesDeps {
  * resource. Every handler authenticates the caller (Bearer token), runs the use
  * case, and maps domain/validation/auth errors to the documented status.
  */
-export function createSocialRoutes({ useCases, verifier }: SocialRoutesDeps) {
+export function createSocialRoutes({ useCases, verifier, logger }: SocialRoutesDeps) {
   return new Elysia({ prefix: "/social/friends" })
     .post("/requests", async ({ body, headers, set }) => {
       try {
         const me = await requireUser(headers.authorization, verifier);
         const { email } = sendRequestSchema.parse(body);
         const result = await useCases.sendFriendRequest.execute(me, email);
+        if (result.status === "accepted") {
+          // Mutual intent: the addressee had already requested us, so this
+          // request immediately formed a friendship — both sides see that.
+          logger.emit(me, "Friend request accepted");
+          logger.emit(result.addresseeId, "Friend request accepted");
+        } else {
+          logger.emit(me, "Friend request sent");
+          logger.emit(result.addresseeId, "Friend request received");
+        }
         set.status = 201;
         return result;
       } catch (err) {
@@ -55,6 +66,9 @@ export function createSocialRoutes({ useCases, verifier }: SocialRoutesDeps) {
         const me = await requireUser(headers.authorization, verifier);
         const id = requestIdSchema.parse(params.id);
         const result = await useCases.acceptFriendRequest.execute(id, me);
+        logger.emit(me, "Friend request accepted");
+        // Notify the original requester that we accepted (the user's reported gap).
+        logger.emit(result.requesterId, "Friend request accepted");
         set.status = 200;
         return result;
       } catch (err) {
@@ -66,6 +80,7 @@ export function createSocialRoutes({ useCases, verifier }: SocialRoutesDeps) {
         const me = await requireUser(headers.authorization, verifier);
         const id = requestIdSchema.parse(params.id);
         await useCases.rejectFriendRequest.execute(id, me);
+        logger.emit(me, "Friend request rejected");
         set.status = 204;
         return null;
       } catch (err) {
@@ -77,6 +92,8 @@ export function createSocialRoutes({ useCases, verifier }: SocialRoutesDeps) {
         const me = await requireUser(headers.authorization, verifier);
         const userId = userIdSchema.parse(params.userId);
         await useCases.removeFriend.execute(me, userId);
+        logger.emit(me, "Friend removed");
+        logger.emit(userId, "Friend removed"); // the dropped friend sees it too
         set.status = 204;
         return null;
       } catch (err) {

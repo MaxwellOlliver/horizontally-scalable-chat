@@ -12,6 +12,8 @@ import type { UserDirectory } from '../ports/user-directory.js'
 export interface SendFriendRequestResult {
   requestId: string
   status: FriendRequestStatus
+  /** The resolved addressee — the counterparty to notify in the activity log. */
+  addresseeId: string
 }
 
 export interface SendFriendRequestDeps extends AcceptPendingDeps {
@@ -47,7 +49,7 @@ export class SendFriendRequest {
     const reverse = await this.deps.friendRequests.findPending(addresseeId, requesterId)
     if (reverse) {
       await acceptPending(this.deps, reverse)
-      return { requestId: reverse.id, status: 'accepted' }
+      return { requestId: reverse.id, status: 'accepted', addresseeId }
     }
 
     // AC-S4 — a pending request already exists this way.
@@ -81,6 +83,6 @@ export class SendFriendRequest {
       data: { requestId: request.id, requesterId },
     })
 
-    return { requestId: request.id, status: 'pending' }
+    return { requestId: request.id, status: 'pending', addresseeId }
   }
 }

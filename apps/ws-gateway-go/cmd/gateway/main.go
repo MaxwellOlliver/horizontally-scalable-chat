@@ -17,6 +17,7 @@ import (
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/config"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/logstream"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/ws"
@@ -56,8 +57,12 @@ func main() {
 	// Presence feed: forward watched friends' status to interested sockets (§5.4).
 	presenceFeed := presence.NewFeed(rdb, presenceStore)
 	defer presenceFeed.Close()
+	// Observability: tag this instance's actions and surface them in the client's
+	// log panel (the delivery hub forwards service-origin logs over `logs:{id}`).
+	logger := logstream.New(logstream.ResolveInstanceID())
+	log.Printf("instance id: %s", logger.InstanceID())
 
-	handler := ws.NewHandler(verifier, reg, presenceStore, deliveryHub, inboundPublisher, presenceFeed, cfg.AuthTimeout)
+	handler := ws.NewHandler(verifier, reg, presenceStore, deliveryHub, inboundPublisher, presenceFeed, logger, cfg.AuthTimeout)
 
 	mux := http.NewServeMux()
 	mux.Handle("/ws", handler)

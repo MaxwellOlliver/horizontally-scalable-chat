@@ -47,6 +47,13 @@ export interface Harness {
   /** Mints a valid HS256 access token for an arbitrary (possibly unknown) id. */
   tokenFor: (userId: string) => Promise<string>
   request: (method: string, path: string, opts?: RequestOptions) => Promise<TestResponse>
+  /** Observability log lines captured from the routes. */
+  logs: LogCapture[]
+}
+
+export interface LogCapture {
+  userIds: string[]
+  event: string
 }
 
 /**
@@ -76,7 +83,11 @@ export function buildHarness(overrides: { livePush?: LivePush } = {}): Harness {
   }
 
   const verifier = createJwtAccessTokenVerifier(SECRET, ISSUER)
-  const app = createApp(assembleUseCases(ports), verifier)
+  const logs: LogCapture[] = []
+  const app = createApp(assembleUseCases(ports), verifier, {
+    emit: (userIds, event) =>
+      logs.push({ userIds: typeof userIds === 'string' ? [userIds] : [...userIds], event }),
+  })
 
   const key = new TextEncoder().encode(SECRET)
   const tokenFor = (userId: string): Promise<string> =>
@@ -127,6 +138,7 @@ export function buildHarness(overrides: { livePush?: LivePush } = {}): Harness {
     createUser,
     tokenFor,
     request,
+    logs,
   }
 }
 

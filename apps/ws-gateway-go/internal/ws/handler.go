@@ -21,6 +21,7 @@ import (
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/auth"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/delivery"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/inbound"
+	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/logstream"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/presence"
 	"github.com/maxwellolliver/horizontally-scalable-chat/ws-gateway-go/internal/registry"
 )
@@ -94,6 +95,12 @@ type PresenceFeed interface {
 	Unwatch(userID string, sink presence.Sink)
 }
 
+// LogStream builds observability log frames tagged with this instance's id
+// (logstream.Logger). Optional — nil disables gateway log emission.
+type LogStream interface {
+	Frame(event string) logstream.Frame
+}
+
 // Handler upgrades HTTP requests to WebSocket connections and enforces the
 // handshake-auth protocol before registering them.
 type Handler struct {
@@ -103,14 +110,15 @@ type Handler struct {
 	delivery     Deliverer
 	inbound      Inbound
 	presenceFeed PresenceFeed
+	logs         LogStream
 	authTimeout  time.Duration
 	upgrader     websocket.Upgrader
 }
 
 // NewHandler builds a Handler. The origin check is permissive here because TLS
-// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del`, `in`
-// and `feed` are the messaging relay + presence feed; any may be nil to run the
-// gateway without that path (e.g. presence-only tests).
+// and origin enforcement terminate at Nginx in deploy (spec §2.1). `del`, `in`,
+// `feed` and `logs` are the messaging relay, presence feed and observability log
+// stream; any may be nil to run the gateway without that path (e.g. tests).
 func NewHandler(
 	v Verifier,
 	reg *registry.Registry,
@@ -118,6 +126,7 @@ func NewHandler(
 	del Deliverer,
 	in Inbound,
 	feed PresenceFeed,
+	logs LogStream,
 	authTimeout time.Duration,
 ) *Handler {
 	return &Handler{
@@ -127,6 +136,7 @@ func NewHandler(
 		delivery:     del,
 		inbound:      in,
 		presenceFeed: feed,
+		logs:         logs,
 		authTimeout:  authTimeout,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
@@ -184,8 +194,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	c.sendJSON(serverFrame{Type: "auth_ok"})
+	h.emitLog(c, "Connected")
 
 	h.serve(c, userID, connID)
+}
+
+// emitLog writes an observability log line straight to the local socket. Gateway
+// logs always concern the connection it holds, so a direct write is reliable and
+// avoids a Redis round-trip (and the race of publishing to a just-subscribed
+// channel). No-op when the log stream is disabled.
+func (h *Handler) emitLog(c *connection, event string) {
+	if h.logs == nil {
+		return
+	}
+	c.sendJSON(h.logs.Frame(event))
 }
 
 // authenticate reads and validates the mandatory first frame. It returns the
@@ -245,10 +267,13 @@ func (h *Handler) serve(c *connection, userID, connID string) {
 			c.sendJSON(serverFrame{Type: "pong"})
 		case "focus":
 			logPresence("focus", h.presence.SetState(ctx, userID, connID, presence.Online))
+			h.emitLog(c, "Presence changed to Online")
 		case "blur":
 			logPresence("blur", h.presence.SetState(ctx, userID, connID, presence.Idle))
+			h.emitLog(c, "Presence changed to Idle")
 		case "message.send":
 			h.publishInbound(userID, f)
+			h.emitLog(c, "Message frame received")
 		case "presence.subscribe":
 			h.updateWatched(ctx, watched, c, f.UserIDs)
 		case "typing.start":

@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router'
 import { ConnectionStatus } from '../components/ConnectionStatus'
 import { Sidebar } from '../components/chat/Sidebar'
+import { LogConsole } from '../components/logs/LogConsole'
 import { Button } from '../components/ui/Button'
+import { LogProvider } from '../features/logs/LogContext'
 import { useAuth } from '../lib/auth/auth-context'
 import { WebSocketProvider, useWebSocket } from '../lib/ws/WebSocketProvider'
 
@@ -24,7 +26,9 @@ export const Route = createFileRoute('/_authed')({
 function AuthedLayout() {
   return (
     <WebSocketProvider>
-      <AuthedShell />
+      <LogProvider>
+        <AuthedShell />
+      </LogProvider>
     </WebSocketProvider>
   )
 }
@@ -73,6 +77,8 @@ function AuthedShell() {
           <Outlet />
         </main>
       </div>
+
+      <LogConsole />
     </div>
   )
 }

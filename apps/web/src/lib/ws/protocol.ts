@@ -77,6 +77,23 @@ export interface ReceiptUpdateFrame {
 }
 
 /**
+ * An observability log line: which instance handled a unit of work concerning
+ * this user. Ephemeral — rendered in the live log panel, never persisted. Emitted
+ * by every tier (auth/social/chat services + the gateway), so it makes the
+ * horizontally-scaled request path visible as it spreads across instances.
+ */
+export interface LogFrame {
+  type: 'log'
+  data: {
+    instance: string
+    source: string
+    event: string
+    at: string
+    detail?: Record<string, unknown>
+  }
+}
+
+/**
  * Frames the gateway/services send to the client — a discriminated union on
  * `type`. Unknown/unhandled frames simply don't match any case in the dispatcher
  * and are ignored (the runtime parse is untyped JSON cast to this).
@@ -93,3 +110,4 @@ export type ServerFrame =
   | PresenceChangedFrame
   | TypingFrame
   | ReceiptUpdateFrame
+  | LogFrame

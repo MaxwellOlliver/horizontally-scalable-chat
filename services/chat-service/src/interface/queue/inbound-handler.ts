@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { LogEmitter } from '@hsc/platform'
 import { DomainError } from '../../domain/errors.js'
 import { safePublish } from '../../application/outbound.js'
 import type { OutboundPublisher } from '../../application/ports/outbound-publisher.js'
@@ -33,6 +34,8 @@ export interface InboundHandlerDeps {
   sendMessage: SendMessage
   recordReceipt: RecordReceipt
   outbound: OutboundPublisher
+  /** Observability stream — which instance handled this unit of work. */
+  logger: LogEmitter
 }
 
 /**
@@ -62,6 +65,7 @@ export function createInboundHandler(deps: InboundHandlerDeps) {
         })
       } catch (err) {
         if (err instanceof DomainError) {
+          deps.logger.emit(envelope.senderId, 'Message rejected', { reason: err.code })
           await safePublish(deps.outbound, envelope.senderId, {
             type: 'message.rejected',
             data: { clientMsgId: envelope.clientMsgId, reason: err.code, message: err.message },
@@ -70,6 +74,8 @@ export function createInboundHandler(deps: InboundHandlerDeps) {
         }
         throw err // unexpected (DB/infra) — let the consumer nack
       }
+      deps.logger.emit(envelope.senderId, 'Message sent')
+      deps.logger.emit(envelope.toUserId, 'Message received')
       return
     }
 
@@ -85,6 +91,7 @@ export function createInboundHandler(deps: InboundHandlerDeps) {
         deliveredUpTo: parsed.data.deliveredUpTo,
         readUpTo: parsed.data.readUpTo,
       })
+      deps.logger.emit(parsed.data.userId, 'Receipt recorded')
       return
     }
 

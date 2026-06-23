@@ -3,9 +3,9 @@ import { loadEnv } from './config/env.js'
 import { createContainer } from './composition-root.js'
 
 const env = loadEnv()
-const { useCases, db } = await createContainer(env)
+const { useCases, logger, close } = await createContainer(env)
 
-const app = createApp(useCases).listen(env.PORT, () => {
+const app = createApp(useCases, logger).listen(env.PORT, () => {
   console.log(`🔐 auth-service listening on port ${env.PORT}`)
 })
 
@@ -20,7 +20,7 @@ const shutdown = async () => {
   } catch {
     /* already stopped */
   }
-  await db.close()
+  await close()
   process.exit(0)
 }
 process.on('SIGINT', shutdown)

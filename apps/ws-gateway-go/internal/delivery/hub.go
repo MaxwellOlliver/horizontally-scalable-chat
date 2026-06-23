@@ -3,8 +3,10 @@
 // per-user Redis channel `user:{id}` and fans incoming frames out to all of
 // their local sockets, unsubscribing when the last one disconnects. The gateway
 // is a dumb relay — it forwards the JSON payload verbatim, understanding nothing
-// about messages, acks or receipts. Routing is a Redis lookup, so a client may
-// land on any gateway (no sticky sessions, REQUIREMENTS §8.2).
+// about messages, acks or receipts. The same per-user subscription also carries
+// the observability log feed (`logs:{id}`), forwarded identically. Routing is a
+// Redis lookup, so a client may land on any gateway (no sticky sessions,
+// REQUIREMENTS §8.2).
 package delivery
 
 import (
@@ -18,6 +20,11 @@ import (
 // userChannel mirrors the `user:{id}` convention chat-service / social-service
 // publish to (@hsc/platform `userChannel`).
 func userChannel(userID string) string { return "user:" + userID }
+
+// logChannel mirrors @hsc/platform `logChannel` (`logs:{id}`): the observability
+// log feed any instance publishes to. The hub forwards it verbatim alongside
+// domain frames, so service-origin log lines reach the user's panel.
+func logChannel(userID string) string { return "logs:" + userID }
 
 // Conn is a single local socket the hub can push raw frames to. Implemented by
 // the ws connection; kept minimal so this package never imports ws (no cycle).
@@ -87,7 +94,9 @@ func (h *Hub) Unregister(userID string, c Conn) {
 // subscribe opens the Redis subscription and starts its pump. Caller holds h.mu.
 func (h *Hub) subscribe(userID string) *group {
 	ctx, cancel := context.WithCancel(context.Background())
-	pubsub := h.rdb.Subscribe(ctx, userChannel(userID))
+	// Both the domain-delivery channel and the observability log feed for this
+	// user — forwarded verbatim through the same fan-out.
+	pubsub := h.rdb.Subscribe(ctx, userChannel(userID), logChannel(userID))
 	g := &group{conns: make(map[Conn]struct{}), pubsub: pubsub, cancel: cancel}
 	go h.pump(ctx, userID, pubsub)
 	return g

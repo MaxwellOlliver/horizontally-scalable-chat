@@ -16,6 +16,15 @@ export function clockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+/** Clock time with seconds for the activity log, where events arrive fast. */
+export function clockSeconds(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 /** Compact relative time for list timestamps: now · 5m · 3h · 2d · Jun 4. */
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
