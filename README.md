@@ -1,8 +1,22 @@
-# Relay — a horizontally-scalable real-time chat
+<p align="center">
+  <img src="docs/images/logo.svg" alt="Relay" width="180" />
+</p>
 
-> Exploring how a WebSocket connection that lives on **one** server instance can still
-> reach a user connected to a **different** one — the core problem of running real-time
-> chat behind more than one box.
+<p align="center">
+  A horizontally-scalable real-time chat
+  <br />
+</p>
+
+<p align="center">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=flat-square" />
+  <img alt="React" src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB&style=flat-square" />
+  <img alt="Go" src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white&style=flat-square" />
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white&style=flat-square" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white&style=flat-square" />
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-FF4438?logo=redis&logoColor=white&style=flat-square" />
+  <img alt="RabbitMQ" src="https://img.shields.io/badge/RabbitMQ-FF6600?logo=rabbitmq&logoColor=white&style=flat-square" />
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white&style=flat-square" />
+</p>
 
 <p align="center">
   <img width="900" alt="Relay — real-time chat UI" src="docs/images/hero.png" />
@@ -11,6 +25,10 @@
 <p align="center">
   <em>1:1 messaging · delivery &amp; read receipts · focus-driven presence · typing · reconnect &amp; resync — across N gateway replicas.</em>
 </p>
+
+> Exploring how a WebSocket connection that lives on **one** server instance can still
+> reach a user connected to a **different** one — the core problem of running real-time
+> chat behind more than one box.
 
 ---
 
