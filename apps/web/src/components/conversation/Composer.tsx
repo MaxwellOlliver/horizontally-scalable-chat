@@ -45,7 +45,11 @@ export function Composer({
           placeholder="Message…"
           className="max-h-32 min-h-10 flex-1 resize-none rounded-xl bg-ink px-3 py-2.5 text-[13.5px] text-fg placeholder:text-fg-faint transition-shadow focus:outline-none focus:ring-2 focus:ring-accent/30"
         />
-        <Button onClick={submit} disabled={!text.trim()} className="h-10 px-4">
+        <Button
+          onClick={submit}
+          disabled={!text.trim()}
+          className="max-h-10 px-4"
+        >
           Send
         </Button>
       </div>
