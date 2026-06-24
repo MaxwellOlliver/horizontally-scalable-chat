@@ -19,6 +19,8 @@ export function applyFrameToCache(qc: QueryClient, frame: ServerFrame): void {
     case 'friendship.removed':
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
+      // Re-resolve any open thread so it flips to `closed` and hides the composer.
+      qc.invalidateQueries({ queryKey: ['conversation'] })
       break
     case 'message.received':
     case 'message.sent':

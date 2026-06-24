@@ -56,6 +56,8 @@ export function useRemoveFriend() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
+      // Re-resolve any open thread so it flips to `closed` and hides the composer.
+      qc.invalidateQueries({ queryKey: ['conversation'] })
     },
   })
 }
