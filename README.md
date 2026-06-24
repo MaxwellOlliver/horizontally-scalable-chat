@@ -156,6 +156,8 @@ flowchart LR
 > `/ws` — and every tier scales with `docker compose --scale`, with the instance ids
 > surfacing live in the app's Activity log.
 
+> The same applies to the databases: the three per-service stores are a single local Postgres, but each service owns its own tables and migrations (no shared tables, no cross-service foreign keys) — so moving to a true > > database-per-service is a connection-string change, not a refactor.
+
 **The pieces:**
 
 | Component | Role |
