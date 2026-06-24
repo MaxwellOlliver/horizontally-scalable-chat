@@ -56,16 +56,24 @@ non-goals.
 
 ## Feature tour
 
-<!-- TODO(assets): drop a small screenshot or GIF beside each row in docs/images/ -->
-
 | | |
 |---|---|
-| **Messaging** — optimistic send, server-assigned UUIDv7 ordering, durable history. | ![messaging](docs/images/messaging.png) |
-| **Receipts** — `sent → delivered → seen`, computed locally from per-conversation high-water marks. | ![receipts](docs/images/receipts.png) |
-| **Presence** — focus-driven `online / idle / offline`, not socket-driven; multi-device precedence. | ![presence](docs/images/presence.png) |
-| **Typing** — debounced ephemeral signal with a timeout fallback. | ![typing](docs/images/typing.png) |
-| **Reconnect & resync** — backoff + jitter, cursor-based catch-up, dedupe by id. | ![reconnect](docs/images/reconnect.png) |
-| **Activity log** — every event tagged with the replica that handled it, so you can *watch* the load balance live. | ![activity log](docs/images/activity-log.png) |
+| **Receipts** — `sent → delivered → seen`, each checkmark computed locally from per-conversation high-water marks. | <img src="docs/images/receipt.gif" width="164" alt="delivery and read receipts" /> |
+| **Presence** — focus-driven `online / idle / offline` (a live socket alone isn't "online"), with multi-device precedence. | <img src="docs/images/presence.gif" width="164" alt="presence states" /> |
+| **Typing** — a debounced, ephemeral signal with a timeout fallback. | <img src="docs/images/typing.gif" width="236" alt="typing indicator" /> |
+
+Plus optimistic **messaging** with durable UUIDv7-ordered history, and **reconnect &
+resync** (backoff + jitter, cursor catch-up, dedupe by id) — see
+[Architecture](#architecture) and [`REQUIREMENTS.md`](./REQUIREMENTS.md).
+
+### Watch it scale
+
+Every event is tagged with the **replica that handled it**, so sending a few messages or
+refreshing a token visibly lands on different instances — the whole point of the project:
+
+<p align="center">
+  <img src="docs/images/activity-log.gif" width="900" alt="Activity log showing events handled across multiple instances" />
+</p>
 
 ---
 
