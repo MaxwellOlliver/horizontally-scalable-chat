@@ -64,6 +64,30 @@ describe('Conversation list', () => {
     expect(res.body.conversations[0].state).toBe('closed')
   })
 
+  it('reports the recipient unread count and honors the read high-water mark', async () => {
+    const send = async (clientMsgId: string, body: string) => {
+      await h.send({ clientMsgId, senderId: a.id, toUserId: b.id, body })
+      const ack = h.outbound.to(a.id).findLast((f) => f.type === 'message.sent')!
+      return { id: ack.data.id as string, conversationId: ack.data.conversationId as string }
+    }
+    await send('m1', 'one')
+    const m2 = await send('m2', 'two')
+    const m3 = await send('m3', 'three')
+
+    const unread = async (user: TestUser) =>
+      (await h.request('GET', '/chat/conversations', { token: user.token })).body.conversations[0]
+        .unreadCount
+
+    expect(await unread(b)).toBe(3) // recipient sees all three
+    expect(await unread(a)).toBe(0) // own messages are never unread
+
+    await h.receipt({ userId: b.id, conversationId: m3.conversationId, readUpTo: m2.id })
+    expect(await unread(b)).toBe(1) // only the one above the read mark remains
+
+    await h.receipt({ userId: b.id, conversationId: m3.conversationId, readUpTo: m3.id })
+    expect(await unread(b)).toBe(0) // caught up
+  })
+
   describe('resolve (GET /chat/conversations/with/:friendId)', () => {
     it('returns the friend profile and null conversation before any message', async () => {
       const res = await h.request('GET', `/chat/conversations/with/${b.id}`, { token: a.token })

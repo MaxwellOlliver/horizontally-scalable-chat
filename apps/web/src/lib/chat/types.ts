@@ -7,6 +7,8 @@ export interface ConversationListItem {
   state: ConversationState
   lastMessage: { id: string; body: string; senderId: string; createdAt: string } | null
   lastActivityAt: string
+  /** Messages from the other participant this user hasn't read yet (§4.4). */
+  unreadCount: number
 }
 
 /** GET /chat/conversations/with/:friendId — the friend + their conversation (if any). */

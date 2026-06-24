@@ -97,12 +97,12 @@ export interface LogCapture {
  * to prove pushes are best-effort without affecting the durable store (AC-D2).
  */
 export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): Harness {
-  const messages = new InMemoryMessageRepository()
+  const receipts = new InMemoryReceiptRepository()
+  const messages = new InMemoryMessageRepository(receipts)
   const conversations = new InMemoryConversationRepository()
   const friends = new InMemoryFriendsReadModel()
   const outbound = new CapturingOutboundPublisher()
   const users = new InMemoryUserDirectory()
-  const receipts = new InMemoryReceiptRepository()
   const clock = new FakeClock()
   const ids = new SequentialUuidGenerator()
   const logs: LogCapture[] = []

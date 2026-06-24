@@ -1,11 +1,11 @@
-import { and, desc, eq, inArray, lt } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Message } from '../../domain/message.js'
 import type {
   MessagePage,
   MessageRepository,
 } from '../../application/ports/message-repository.js'
 import type { Database } from '../db/client.js'
-import { messages, type MessageRow } from '../db/schema.js'
+import { messageReceipts, messages, type MessageRow } from '../db/schema.js'
 
 export function createDrizzleMessageRepository(db: Database): MessageRepository {
   return {
@@ -60,6 +60,35 @@ export function createDrizzleMessageRepository(db: Database): MessageRepository 
         .where(inArray(messages.conversationId, conversationIds))
         .orderBy(messages.conversationId, desc(messages.id))
       return rows.map(toDomain)
+    },
+
+    async unreadCounts(userId: string, conversationIds: string[]): Promise<Map<string, number>> {
+      if (conversationIds.length === 0) return new Map()
+      // Count partner messages above this user's read mark. LEFT JOIN their
+      // receipt row so a conversation with no pointer counts every partner
+      // message (read_up_to IS NULL).
+      const rows = await db
+        .select({
+          conversationId: messages.conversationId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(messages)
+        .leftJoin(
+          messageReceipts,
+          and(
+            eq(messageReceipts.conversationId, messages.conversationId),
+            eq(messageReceipts.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            inArray(messages.conversationId, conversationIds),
+            ne(messages.senderId, userId),
+            or(isNull(messageReceipts.readUpTo), gt(messages.id, messageReceipts.readUpTo)),
+          ),
+        )
+        .groupBy(messages.conversationId)
+      return new Map(rows.map((r) => [r.conversationId, r.count]))
     },
   }
 }

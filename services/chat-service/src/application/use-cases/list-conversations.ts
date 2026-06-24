@@ -11,6 +11,8 @@ export interface ConversationListItem {
   lastMessage: { id: string; body: string; senderId: string; createdAt: string } | null
   /** ISO timestamp of the last activity (last message, else conversation creation). */
   lastActivityAt: string
+  /** Messages from the other participant this user hasn't read yet (§4.4). */
+  unreadCount: number
 }
 
 /**
@@ -31,10 +33,12 @@ export class ListConversations {
     const conversations = await this.conversations.listForUser(me)
     if (conversations.length === 0) return []
 
+    const conversationIds = conversations.map((c) => c.id)
     const lastByConversation = new Map<string, Message>()
-    for (const message of await this.messages.latestByConversations(conversations.map((c) => c.id))) {
+    for (const message of await this.messages.latestByConversations(conversationIds)) {
       lastByConversation.set(message.conversationId, message)
     }
+    const unreadByConversation = await this.messages.unreadCounts(me, conversationIds)
 
     const otherId = (c: Conversation): string => (c.userA === me ? c.userB : c.userA)
     const profiles = await this.users.listProfiles([...new Set(conversations.map(otherId))])
@@ -56,6 +60,7 @@ export class ListConversations {
             }
           : null,
         lastActivityAt: (last?.createdAt ?? c.createdAt).toISOString(),
+        unreadCount: unreadByConversation.get(c.id) ?? 0,
       }
     })
 

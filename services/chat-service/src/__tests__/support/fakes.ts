@@ -48,6 +48,10 @@ export class SequentialUuidGenerator implements IdGenerator {
 export class InMemoryMessageRepository implements MessageRepository {
   readonly rows: Message[] = []
 
+  constructor(
+    private readonly receipts?: { readUpTo(conversationId: string, userId: string): string | null },
+  ) {}
+
   async insert(message: Message): Promise<{ message: Message; created: boolean }> {
     const existing = this.rows.find(
       (m) => m.senderId === message.senderId && m.clientMsgId === message.clientMsgId,
@@ -77,6 +81,18 @@ export class InMemoryMessageRepository implements MessageRepository {
       if (!current || m.id > current.id) latest.set(m.conversationId, m)
     }
     return [...latest.values()].map((m) => ({ ...m }))
+  }
+
+  async unreadCounts(userId: string, conversationIds: string[]): Promise<Map<string, number>> {
+    const ids = new Set(conversationIds)
+    const counts = new Map<string, number>()
+    for (const m of this.rows) {
+      if (!ids.has(m.conversationId) || m.senderId === userId) continue
+      const readUpTo = this.receipts?.readUpTo(m.conversationId, userId) ?? null
+      if (readUpTo && m.id <= readUpTo) continue
+      counts.set(m.conversationId, (counts.get(m.conversationId) ?? 0) + 1)
+    }
+    return counts
   }
 }
 
@@ -212,6 +228,11 @@ export class InMemoryReceiptRepository implements ReceiptRepository {
       if (key.startsWith(`${conversationId}|`)) out.push({ ...pointer })
     }
     return out
+  }
+
+  /** Synchronous read used by the message fake to compute unread counts. */
+  readUpTo(conversationId: string, userId: string): string | null {
+    return this.rows.get(`${conversationId}|${userId}`)?.readUpTo ?? null
   }
 }
 

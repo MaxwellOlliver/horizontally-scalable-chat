@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getHistory, getReceipts, resolveConversation } from '../../lib/chat/api'
-import type { ConversationState } from '../../lib/chat/types'
+import type { ConversationListItem, ConversationState } from '../../lib/chat/types'
 import { useAuth } from '../../lib/auth/auth-context'
 import { useDocumentFocus } from '../../lib/useDocumentFocus'
 import { useWebSocket } from '../../lib/ws/WebSocketProvider'
@@ -179,12 +179,17 @@ export function useConversation(friendId: string): UseConversationResult {
         emittedRead.current = partnerLatestId
         emittedDelivered.current = partnerLatestId
         send({ type: 'receipt', conversationId, readUpTo: partnerLatestId })
+        // Clear the sidebar unread badge immediately, rather than waiting for the
+        // next conversations refetch to report the server-recomputed count.
+        qc.setQueryData<ConversationListItem[]>(['conversations'], (rows) =>
+          rows?.map((c) => (c.conversationId === conversationId ? { ...c, unreadCount: 0 } : c)),
+        )
       }
     } else if (!emittedDelivered.current || partnerLatestId > emittedDelivered.current) {
       emittedDelivered.current = partnerLatestId
       send({ type: 'receipt', conversationId, deliveredUpTo: partnerLatestId })
     }
-  }, [conversationId, partnerLatestId, focused, send])
+  }, [conversationId, partnerLatestId, focused, send, qc])
 
   return {
     friend,
