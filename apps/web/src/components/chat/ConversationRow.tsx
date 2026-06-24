@@ -16,8 +16,8 @@ export function ConversationRow({ item, me }: { item: ConversationListItem; me: 
     <Link
       to="/chat/$friendId"
       params={{ friendId: item.otherUser.id }}
-      activeProps={{ className: 'bg-panel-2' }}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-panel-2/70"
+      activeProps={{ className: 'bg-panel-dim' }}
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-panel-2/40"
     >
       <Avatar name={item.otherUser.displayName} className="h-10 w-10 text-xs" />
 

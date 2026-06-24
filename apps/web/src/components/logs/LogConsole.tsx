@@ -23,7 +23,7 @@ export function LogConsole() {
 
   return (
     <section
-      className="shrink-0 border-t border-line bg-panel/80 backdrop-blur"
+      className="shrink-0 bg-bar"
       aria-label="Activity log"
     >
       <header className="flex items-center gap-3 px-4 py-2">

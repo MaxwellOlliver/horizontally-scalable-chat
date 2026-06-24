@@ -47,7 +47,7 @@ function AuthedShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-line px-6 py-3">
+      <header className="flex shrink-0 items-center justify-between bg-bar px-6 py-3">
         <span className="text-gradient text-lg font-semibold tracking-[0.22em]">RELAY</span>
         <div className="flex items-center gap-3">
           <ConnectionStatus state={linkState} latencyMs={latencyMs} />
@@ -61,7 +61,7 @@ function AuthedShell() {
       </header>
 
       {degraded && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-panel/70 px-6 py-2 backdrop-blur">
+        <div className="flex shrink-0 items-center gap-2 bg-idle/10 px-6 py-2">
           <span className="h-1.5 w-1.5 rounded-full bg-idle" />
           <span className="font-mono text-[11px] text-idle">
             {linkState === 'reconnecting'
