@@ -3,6 +3,7 @@ import { ConnectionStatus } from '../components/ConnectionStatus'
 import { Sidebar } from '../components/chat/Sidebar'
 import { LogConsole } from '../components/logs/LogConsole'
 import { Button } from '../components/ui/Button'
+import { useDeliveryReceipts } from '../features/conversation/useDeliveryReceipts'
 import { LogProvider } from '../features/logs/LogContext'
 import { useAuth } from '../lib/auth/auth-context'
 import { WebSocketProvider, useWebSocket } from '../lib/ws/WebSocketProvider'
@@ -39,6 +40,9 @@ function AuthedShell() {
   const { linkState, latencyMs } = useWebSocket()
   const name = auth.user?.displayName ?? auth.user?.email ?? 'you'
   const degraded = linkState === 'reconnecting' || linkState === 'offline'
+
+  // Ack delivery for every inbound message, app-wide — not just the open thread.
+  useDeliveryReceipts()
 
   async function onLogout() {
     await auth.logout()
