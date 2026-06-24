@@ -15,6 +15,9 @@ export function applyFrameToCache(qc: QueryClient, frame: ServerFrame): void {
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['requests', 'outgoing'] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
+      // Re-resolve any open thread so a re-friended conversation flips back to
+      // `open` and shows the composer again (mirror of friendship.removed).
+      qc.invalidateQueries({ queryKey: ['conversation'] })
       break
     case 'friendship.removed':
       qc.invalidateQueries({ queryKey: ['friends'] })
