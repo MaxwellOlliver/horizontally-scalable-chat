@@ -126,7 +126,11 @@ export class RelaySocket {
   private onAuthenticated(): void {
     this.attempt = 0
     this.setState('live')
-    this.sendFocusState() // re-report focus on every (re)connect (§8.2)
+    // Re-establish focus on every (re)connect (§8.2). The gateway registers a new
+    // connection as Idle by default, so only the focused case needs reporting —
+    // re-sending `blur` would just restate the default and spam a redundant
+    // presence change on each reconnect.
+    if (this.focused) this.send({ type: 'focus' })
     this.startHeartbeat()
   }
 
@@ -165,7 +169,13 @@ export class RelaySocket {
   }
 
   private onFocusChange = (): void => {
-    this.focused = isFocused()
+    // The browser fires visibilitychange/focus/blur in many cases where the
+    // effective focus state is unchanged; only report real transitions so we
+    // don't spam the gateway (and the activity log) with redundant focus/blur
+    // frames.
+    const focused = isFocused()
+    if (focused === this.focused) return
+    this.focused = focused
     this.sendFocusState()
   }
 
