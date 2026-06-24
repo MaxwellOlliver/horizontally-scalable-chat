@@ -1,19 +1,31 @@
 @import 'tailwindcss';
 
 /*
- * Relay design tokens — "citrus noir", dark only.
- * Warm charcoal surfaces (never pure black, never blue/purple), one electric
- * lime accent used sparingly. Generous radius, soft elevation. Geist Sans for
+ * Relay design tokens — neutral noir, dark only.
+ * Natural near-black surfaces in neutral grey (no colour cast), one electric
+ * lime accent used sparingly. Sharp corners, solid elevation. Geist Sans for
  * UI/messages, Geist Mono for machine metadata (ids, timestamps, link state).
  */
 @theme {
-  /* Surfaces — warm graphite. Panels sit only a hair above the page; depth
-     comes from hairlines + shadow, not brightness. */
-  --color-ink: #111110; /* page */
-  --color-panel: #181714; /* cards, columns */
-  --color-panel-2: #201e19; /* raised / hover */
-  --color-line: #2b2924; /* hairline borders, dividers */
-  --color-line-strong: #39362f; /* hover/active borders */
+  /* Surfaces — neutral near-black, as a stacked ladder. Separation comes from
+     the fill stepping brighter, not from borders, and the chrome is split per
+     region so each part of the layout reads as its own surface. Brightest →
+     darkest, spotlighting the active conversation chrome:
+       surface — conversation chrome: thread header + composer (brightest)
+       rail    — sidebar column
+       ink     — message stage / page
+       bar     — top app header + activity log (darkest, the outer frame)
+       panel-2 — raised: cards, inputs, bubbles, rows, buttons, status pill
+       panel-3 — hover / active on a raised surface */
+  --color-surface: #1e1e1e; /* thread header + composer (brightest region) */
+  --color-rail: #161616; /* sidebar column */
+  --color-ink: #101010; /* message stage / page */
+  --color-bar: #0c0c0c; /* top app header + activity log (darkest) */
+  --color-panel-dim: #242424; /* muted raised: selected row, active tab, incoming bubble */
+  --color-panel-2: #2e2e2e; /* raised */
+  --color-panel-3: #3a3a3a; /* hover / active on a raised surface */
+  --color-line: #303030; /* the few remaining hairlines, dividers */
+  --color-line-strong: #3e3e3e;
 
   /* Foreground — warm bone white. */
   --color-fg: #f0efe9;
@@ -31,12 +43,13 @@
   --color-down: #74715f;
   --color-danger: #f2674e;
 
-  /* Generous, friendly radius. */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 26px;
+  /* Sharp, near-square corners. Pills, dots and avatars opt back into a full
+     round via `rounded-full` (unaffected by these tokens). */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
 
   /* Soft elevation tuned for a warm dark surface. */
   --shadow-soft: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 18px 40px -24px rgb(0 0 0 / 0.8);
@@ -59,13 +72,9 @@
   }
 
   body {
+    /* Flat, natural near-black — no colour cast. Depth is carried by the
+       per-region surface ladder, not a background wash. */
     background-color: var(--color-ink);
-    /* Quiet warm lift + a barely-there lime hint. Kept low so raised panels
-       don't look washed out. */
-    background-image:
-      radial-gradient(75% 55% at 12% -8%, rgb(255 247 230 / 0.035), transparent 60%),
-      radial-gradient(50% 42% at 100% 0%, color-mix(in oklab, var(--color-accent) 6%, transparent), transparent 55%);
-    background-attachment: fixed;
     color: var(--color-fg);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -76,6 +85,36 @@
     background-color: color-mix(in oklab, var(--color-accent) 36%, transparent);
     color: var(--color-fg);
   }
+
+  /* Scrollbars — slim, neutral, on-theme. Track is invisible; the thumb is a
+     muted pill that lifts on hover. (Firefox uses scrollbar-* ; WebKit/Blink
+     use the ::-webkit-scrollbar pseudo-elements.) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    /* Padding via a transparent border keeps the thumb slim and inset. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    background-color: var(--color-line);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-line-strong);
+  }
 }
 
 @utility text-gradient {
@@ -85,13 +124,12 @@
   color: transparent;
 }
 
-/* A raised dark card: a flat near-page panel defined by a hairline + soft
-   shadow. Stays dark — the separation is the border and shadow, not a lighter
-   fill. */
+/* A raised card: a solid panel that sits just above the page — a quiet lift in
+   fill plus a soft shadow, no border. Kept close to the page so it doesn't
+   shout against the near-black background. */
 @utility card {
-  border: 1px solid var(--color-line);
   border-radius: var(--radius-2xl);
-  background-color: var(--color-panel);
+  background-color: var(--color-surface);
   box-shadow: var(--shadow-soft);
 }
 

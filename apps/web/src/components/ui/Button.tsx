@@ -7,7 +7,7 @@ const VARIANTS: Record<Variant, string> = {
   primary:
     "bg-accent text-ink hover:bg-accent-strong disabled:hover:bg-accent font-medium",
   ghost:
-    "border border-line bg-panel text-fg-muted hover:text-fg hover:border-line-strong",
+    "bg-panel-2 text-fg-muted hover:bg-panel-3 hover:text-fg",
 };
 
 export function Button({

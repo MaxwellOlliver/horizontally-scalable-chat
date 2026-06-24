@@ -15,8 +15,8 @@ export function Sidebar() {
   const requestCount = incoming.data?.length ?? 0
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-r border-line bg-panel/30">
-      <div className="flex shrink-0 gap-1 border-b border-line p-2">
+    <aside className="flex w-80 shrink-0 flex-col bg-rail">
+      <div className="flex shrink-0 gap-1 p-2">
         <TabButton active={tab === 'chats'} onClick={() => setTab('chats')}>
           Chats
         </TabButton>
@@ -48,7 +48,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
-        active ? 'bg-panel-2 text-fg' : 'text-fg-muted hover:text-fg'
+        active ? 'bg-panel-dim text-fg' : 'text-fg-muted hover:text-fg'
       }`}
     >
       {children}

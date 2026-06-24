@@ -25,7 +25,7 @@ export function Conversation({ friendId }: { friendId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-line px-5 py-3">
+      <header className="flex shrink-0 items-center gap-3 bg-surface px-5 py-3">
         <Avatar name={friend?.displayName ?? null} className="h-8 w-8 text-[10px]" />
         <div className="flex flex-col">
           <span className="text-[14px] font-medium leading-tight text-fg">
@@ -42,7 +42,7 @@ export function Conversation({ friendId }: { friendId: string }) {
       )}
 
       {state === 'closed' ? (
-        <div className="shrink-0 border-t border-line px-5 py-4 text-center">
+        <div className="shrink-0 bg-surface px-5 py-4 text-center">
           <p className="text-[12.5px] text-fg-muted">
             You’re no longer friends. Re-add them to start chatting again.
           </p>

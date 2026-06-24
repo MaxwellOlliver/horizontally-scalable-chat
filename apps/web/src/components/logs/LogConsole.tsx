@@ -1,15 +1,16 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import { useLogs, type LogEntry } from '../../features/logs/LogContext'
-import { clockSeconds } from '../../lib/format'
+import { useLayoutEffect, useRef, useState } from "react";
+import { useLogs, type LogEntry } from "../../features/logs/LogContext";
+import { clockSeconds } from "../../lib/format";
 
 /** On-brand colour per service tier (citrus-noir: warm hues, no blue/purple). */
 const SOURCE_COLOR: Record<string, string> = {
-  'ws-gateway': '#cdf24a',
-  'chat-service': '#f0b429',
-  'auth-service': '#8be04a',
-  'social-service': '#e0913a',
-}
-const sourceColor = (source: string): string => SOURCE_COLOR[source] ?? '#a6a394'
+  "ws-gateway": "#cdf24a",
+  "chat-service": "#f0b429",
+  "auth-service": "#8be04a",
+  "social-service": "#e0913a",
+};
+const sourceColor = (source: string): string =>
+  SOURCE_COLOR[source] ?? "#a6a394";
 
 /**
  * The activity log: a collapsible console pinned to the bottom of the shell.
@@ -18,14 +19,11 @@ const sourceColor = (source: string): string => SOURCE_COLOR[source] ?? '#a6a394
  * point of the exercise. Ephemeral; "Clear" wipes the buffer.
  */
 export function LogConsole() {
-  const { entries, instances, clear } = useLogs()
-  const [open, setOpen] = useState(false)
+  const { entries, instances, clear } = useLogs();
+  const [open, setOpen] = useState(false);
 
   return (
-    <section
-      className="shrink-0 border-t border-line bg-panel/80 backdrop-blur"
-      aria-label="Activity log"
-    >
+    <section className="shrink-0 bg-bar" aria-label="Activity log">
       <header className="flex items-center gap-3 px-4 py-2">
         <button
           type="button"
@@ -34,19 +32,22 @@ export function LogConsole() {
           aria-expanded={open}
         >
           <Chevron open={open} />
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Activity</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
+            Activity
+          </span>
         </button>
 
         <span className="font-mono text-[10.5px] text-fg-faint">
-          {entries.length} {entries.length === 1 ? 'event' : 'events'}
+          {entries.length} {entries.length === 1 ? "event" : "events"}
         </span>
 
         {instances.length > 0 && (
           <span
             className="font-mono text-[10.5px] text-accent"
-            title={instances.join('\n')}
+            title={instances.join("\n")}
           >
-            {instances.length} {instances.length === 1 ? 'instance' : 'instances'}
+            {instances.length}{" "}
+            {instances.length === 1 ? "instance" : "instances"} discovered
           </span>
         )}
 
@@ -65,34 +66,35 @@ export function LogConsole() {
 
       {open && <LogList entries={entries} />}
     </section>
-  )
+  );
 }
 
 function LogList({ entries }: { entries: LogEntry[] }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const pinnedRef = useRef(true)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true);
 
   // Track whether the user is scrolled to the bottom; only autoscroll if so, so
   // reading older lines isn't yanked away by new arrivals.
   const onScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
-  }
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
   useLayoutEffect(() => {
     if (pinnedRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [entries.length])
+  }, [entries.length]);
 
   if (entries.length === 0) {
     return (
       <div className="px-4 pb-4 pt-1">
         <p className="font-mono text-[11px] text-fg-faint">
-          Waiting for activity — send a message or add a friend to see which instance handles it.
+          Waiting for activity — send a message or add a friend to see which
+          instance handles it.
         </p>
       </div>
-    )
+    );
   }
 
   return (
@@ -107,11 +109,11 @@ function LogList({ entries }: { entries: LogEntry[] }) {
         ))}
       </ul>
     </div>
-  )
+  );
 }
 
 function LogRow({ entry }: { entry: LogEntry }) {
-  const color = sourceColor(entry.source)
+  const color = sourceColor(entry.source);
   return (
     <li className="flex items-baseline gap-2.5 rounded-md px-2 py-1 hover:bg-panel-2">
       <time className="shrink-0 font-mono text-[10.5px] tabular-nums text-fg-faint">
@@ -125,7 +127,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
       </span>
       <span className="font-mono text-[11.5px] text-fg">{entry.event}</span>
     </li>
-  )
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -139,10 +141,10 @@ function Chevron({ open }: { open: boolean }) {
       strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`transition-transform ${open ? 'rotate-90' : ''}`}
+      className={`transition-transform ${open ? "rotate-90" : ""}`}
       aria-hidden
     >
       <path d="M4.5 2.5L8 6l-3.5 3.5" />
     </svg>
-  )
+  );
 }

@@ -7,6 +7,7 @@ name: hsc-relay
 #   App tiers      : auth-service · social-service · chat-service
 #   Gateway        : ws-gateway-go (WebSocket)
 #   Edge           : nginx (routes /auth /social /chat /presence /ws)
+#   Client         : web (Relay SPA served by nginx; proxies /api -> edge)
 #
 # Ordering is driven by HEALTHCHECKS, not guesswork: each app tier waits for the
 # infrastructure it uses to be *healthy* (not merely started) and for its
@@ -289,6 +290,29 @@ services:
         condition: service_healthy
       ws-gateway-go:
         condition: service_healthy
+
+  # ------------------------------------------------------------------------ client
+  # The Relay SPA (apps/web). Built to static assets and served by its own nginx,
+  # which also proxies the same-origin /api/* prefix (stripped) to the edge front
+  # door — mirroring the dev Vite proxy so the client speaks same-origin. Open the
+  # app at http://localhost:${WEB_PORT}.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    # The edge owns /api routing; wait for it so the first requests don't 502.
+    depends_on:
+      nginx:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   pgdata:

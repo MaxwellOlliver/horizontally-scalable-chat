@@ -24,6 +24,8 @@ export function useAddFriend() {
       if (result.status === 'accepted') {
         qc.invalidateQueries({ queryKey: ['friends'] })
         qc.invalidateQueries({ queryKey: ['conversations'] })
+        // Re-resolve any open thread so a re-friended conversation reopens.
+        qc.invalidateQueries({ queryKey: ['conversation'] })
       }
     },
   })
@@ -37,6 +39,8 @@ export function useAcceptRequest() {
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['requests', 'incoming'] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
+      // Re-resolve any open thread so a re-friended conversation reopens.
+      qc.invalidateQueries({ queryKey: ['conversation'] })
     },
   })
 }
@@ -56,6 +60,8 @@ export function useRemoveFriend() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['friends'] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
+      // Re-resolve any open thread so it flips to `closed` and hides the composer.
+      qc.invalidateQueries({ queryKey: ['conversation'] })
     },
   })
 }

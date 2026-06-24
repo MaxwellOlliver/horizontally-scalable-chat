@@ -1,7 +1,16 @@
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { tokenStore } from './token-store'
 import { decodeJwt } from './jwt'
 import { loginUser, logoutUser, registerUser } from './auth-api'
+import { queryClient } from '../query'
 import type { AuthContextValue, Profile, Session } from './types'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -22,6 +31,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.getSnapshot,
     tokenStore.getSnapshot,
   )
+
+  // Drop the React Query cache whenever the signed-in user changes, so one
+  // account never reads another's cached friends/conversations/history. Covers
+  // logout, login, account-switch, and the cross-tab / token-expiry paths that
+  // mutate the token store directly (not via the logout action). The first
+  // observed identity is the baseline — a fresh session keeps its own data.
+  const userId = session?.profile.id ?? null
+  const lastUserId = useRef(userId)
+  useEffect(() => {
+    if (lastUserId.current !== userId) {
+      lastUserId.current = userId
+      queryClient.clear()
+    }
+  }, [userId])
 
   const value = useMemo<AuthContextValue>(
     () => ({
