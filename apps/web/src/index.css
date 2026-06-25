@@ -53,7 +53,8 @@
 
   /* Soft elevation tuned for a warm dark surface. */
   --shadow-soft: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 18px 40px -24px rgb(0 0 0 / 0.8);
-  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent),
+  --shadow-glow:
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent),
     0 18px 50px -22px color-mix(in oklab, var(--color-accent) 38%, transparent);
 
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;

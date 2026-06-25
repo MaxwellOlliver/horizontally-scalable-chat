@@ -80,7 +80,12 @@ export function assembleUseCases(ports: ChatPorts): ChatApplication {
     listConversations: new ListConversations(ports.conversations, ports.messages, ports.users),
     resolveConversation: new ResolveConversation(ports.conversations, ports.users),
     getReceipts: new GetReceipts(ports.conversations, ports.receipts),
-    recordReceipt: new RecordReceipt(ports.conversations, ports.receipts, ports.outbound, ports.clock),
+    recordReceipt: new RecordReceipt(
+      ports.conversations,
+      ports.receipts,
+      ports.outbound,
+      ports.clock,
+    ),
     applyFriendAccepted: new ApplyFriendAccepted(ports.friends, ports.conversations),
     applyFriendRemoved: new ApplyFriendRemoved(ports.friends, ports.conversations),
   }

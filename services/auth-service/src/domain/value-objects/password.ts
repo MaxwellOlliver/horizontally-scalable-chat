@@ -13,9 +13,7 @@ export class Password {
 
   static create(raw: string): Password {
     if (typeof raw !== 'string' || raw.length < PASSWORD_MIN_LENGTH) {
-      throw new WeakPasswordError(
-        `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
-      )
+      throw new WeakPasswordError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
     }
     if (raw.length > PASSWORD_MAX_LENGTH) {
       throw new WeakPasswordError('Password is too long')

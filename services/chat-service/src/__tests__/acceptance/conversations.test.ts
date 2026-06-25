@@ -104,9 +104,13 @@ describe('Conversation list', () => {
     })
 
     it('404s for an unknown user id', async () => {
-      const res = await h.request('GET', '/chat/conversations/with/00000000-0000-7000-8000-0000dead0000', {
-        token: a.token,
-      })
+      const res = await h.request(
+        'GET',
+        '/chat/conversations/with/00000000-0000-7000-8000-0000dead0000',
+        {
+          token: a.token,
+        },
+      )
       expect(res.status).toBe(404)
     })
 

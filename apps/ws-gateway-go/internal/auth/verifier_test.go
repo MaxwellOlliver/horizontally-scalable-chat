@@ -50,14 +50,14 @@ func TestVerifyRejects(t *testing.T) {
 	v := NewVerifier(testSecret, testIssuer)
 
 	cases := map[string]string{
-		"empty":           "",
-		"garbage":         "not.a.jwt",
-		"expired":         mint(t, jwt.SigningMethodHS256, []byte(testSecret), validClaims("u", -time.Minute)),
-		"wrong secret":    mint(t, jwt.SigningMethodHS256, []byte("another-secret-another-secret-xxxx"), validClaims("u", time.Minute)),
-		"wrong issuer":    mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"sub": "u", "iss": "someone-else", "exp": time.Now().Add(time.Minute).Unix()}),
-		"missing sub":     mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"iss": testIssuer, "exp": time.Now().Add(time.Minute).Unix()}),
-		"missing exp":     mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"sub": "u", "iss": testIssuer}),
-		"alg none":        mint(t, jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType, validClaims("u", time.Minute)),
+		"empty":        "",
+		"garbage":      "not.a.jwt",
+		"expired":      mint(t, jwt.SigningMethodHS256, []byte(testSecret), validClaims("u", -time.Minute)),
+		"wrong secret": mint(t, jwt.SigningMethodHS256, []byte("another-secret-another-secret-xxxx"), validClaims("u", time.Minute)),
+		"wrong issuer": mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"sub": "u", "iss": "someone-else", "exp": time.Now().Add(time.Minute).Unix()}),
+		"missing sub":  mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"iss": testIssuer, "exp": time.Now().Add(time.Minute).Unix()}),
+		"missing exp":  mint(t, jwt.SigningMethodHS256, []byte(testSecret), jwt.MapClaims{"sub": "u", "iss": testIssuer}),
+		"alg none":     mint(t, jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType, validClaims("u", time.Minute)),
 	}
 
 	for name, token := range cases {

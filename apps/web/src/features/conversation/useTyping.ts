@@ -54,10 +54,6 @@ export function useTypingIndicator(friendId: string): boolean {
   const fallback = useRef<Timer>(undefined)
 
   useEffect(() => {
-    setTyping(false)
-  }, [friendId])
-
-  useEffect(() => {
     return subscribe((frame) => {
       if (frame.type === 'typing.start' && frame.data.userId === friendId) {
         setTyping(true)

@@ -5,12 +5,7 @@ import type { RefreshSession } from '../../../application/use-cases/refresh-sess
 import type { RegisterUser } from '../../../application/use-cases/register-user.js'
 import type { RevokeSession } from '../../../application/use-cases/revoke-session.js'
 import { toHttpError } from '../error-mapper.js'
-import {
-  loginSchema,
-  logoutSchema,
-  refreshSchema,
-  registerSchema,
-} from '../validation.js'
+import { loginSchema, logoutSchema, refreshSchema, registerSchema } from '../validation.js'
 
 export interface AuthUseCases {
   registerUser: RegisterUser

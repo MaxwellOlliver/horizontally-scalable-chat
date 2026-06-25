@@ -47,7 +47,9 @@ describe('Authentication & validation', () => {
 
   it('rejects an unknown direction value with 422', async () => {
     const a = await h.createUser()
-    const res = await h.request('GET', '/social/friends/requests?direction=sideways', { token: a.token })
+    const res = await h.request('GET', '/social/friends/requests?direction=sideways', {
+      token: a.token,
+    })
     expect(res.status).toBe(422)
   })
 })

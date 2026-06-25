@@ -19,11 +19,7 @@ export default defineConfig(({ mode }) => {
   return {
     // tanstackRouter must come before the React plugin (it generates the route
     // tree from src/routes/** into src/routeTree.gen.ts).
-    plugins: [
-      tanstackRouter({ target: 'react', autoCodeSplitting: true }),
-      react(),
-      tailwindcss(),
-    ],
+    plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
     server: {
       // Bind all interfaces (not just 127.0.0.1) so the dev server is reachable
       // from the Windows host across the WSL2 boundary — loopback-only binds are

@@ -14,7 +14,9 @@ describe('Friendship & lists', () => {
       token: a.token,
       body: { email: b.email },
     })
-    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, { token: b.token })
+    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, {
+      token: b.token,
+    })
   }
 
   it('AC-F1: a friendship is symmetric and unique per pair regardless of requester', async () => {
@@ -41,7 +43,9 @@ describe('Friendship & lists', () => {
     const after = await h.request('GET', `/social/friends/${b.id}/status`, { token: a.token })
     expect(after.body.areFriends).toBe(true)
 
-    const unrelated = await h.request('GET', `/social/friends/${stranger.id}/status`, { token: a.token })
+    const unrelated = await h.request('GET', `/social/friends/${stranger.id}/status`, {
+      token: a.token,
+    })
     expect(unrelated.body.areFriends).toBe(false)
   })
 
@@ -63,7 +67,10 @@ describe('Friendship & lists', () => {
   it('AC-F3: lists incoming and outgoing pending requests independently', async () => {
     const a = await h.createUser()
     const b = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: b.email } })
+    await h.request('POST', '/social/friends/requests', {
+      token: a.token,
+      body: { email: b.email },
+    })
 
     const outgoing = await h.request('GET', '/social/friends/requests?direction=outgoing', {
       token: a.token,

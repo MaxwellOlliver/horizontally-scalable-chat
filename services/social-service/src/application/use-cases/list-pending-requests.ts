@@ -21,10 +21,7 @@ export class ListPendingRequests {
     private readonly users: UserDirectory,
   ) {}
 
-  async execute(
-    me: string,
-    direction: 'incoming' | 'outgoing',
-  ): Promise<PendingRequestView[]> {
+  async execute(me: string, direction: 'incoming' | 'outgoing'): Promise<PendingRequestView[]> {
     const rows = await this.friendRequests.listPending(me, direction)
     const otherId = (r: { requesterId: string; addresseeId: string }) =>
       direction === 'incoming' ? r.requesterId : r.addresseeId

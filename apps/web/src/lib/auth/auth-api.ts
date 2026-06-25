@@ -27,10 +27,7 @@ export async function registerUser(input: {
   return data as { userId: string }
 }
 
-export async function loginUser(input: {
-  email: string
-  password: string
-}): Promise<TokenPair> {
+export async function loginUser(input: { email: string; password: string }): Promise<TokenPair> {
   const { data } = await authClient.post('/auth/login', input)
   return data as TokenPair
 }

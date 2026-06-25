@@ -55,7 +55,10 @@ describe('Sending a friend request', () => {
   it('AC-S4: rejects a duplicate pending request (same direction) with 409', async () => {
     const a = await h.createUser()
     const b = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: b.email } })
+    await h.request('POST', '/social/friends/requests', {
+      token: a.token,
+      body: { email: b.email },
+    })
 
     const res = await h.request('POST', '/social/friends/requests', {
       token: a.token,
@@ -65,7 +68,9 @@ describe('Sending a friend request', () => {
     expect(res.status).toBe(409)
     expect(res.body.error).toBe('DUPLICATE_REQUEST')
     // Only the original pending request exists.
-    expect([...h.friendRequests.rows.values()].filter((r) => r.status === 'pending')).toHaveLength(1)
+    expect([...h.friendRequests.rows.values()].filter((r) => r.status === 'pending')).toHaveLength(
+      1,
+    )
   })
 
   it('AC-S5: a reverse pending request auto-accepts into a friendship', async () => {
@@ -112,9 +117,13 @@ describe('Sending a friend request', () => {
       body: { email: b.email },
     })
     // B rejects.
-    const rejected = await h.request('POST', `/social/friends/requests/${first.body.requestId}/reject`, {
-      token: b.token,
-    })
+    const rejected = await h.request(
+      'POST',
+      `/social/friends/requests/${first.body.requestId}/reject`,
+      {
+        token: b.token,
+      },
+    )
     expect(rejected.status).toBe(204)
 
     // A may send again.

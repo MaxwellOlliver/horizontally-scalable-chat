@@ -6,11 +6,17 @@ export function useFriends() {
 }
 
 export function useIncomingRequests() {
-  return useQuery({ queryKey: ['requests', 'incoming'], queryFn: () => social.listRequests('incoming') })
+  return useQuery({
+    queryKey: ['requests', 'incoming'],
+    queryFn: () => social.listRequests('incoming'),
+  })
 }
 
 export function useOutgoingRequests() {
-  return useQuery({ queryKey: ['requests', 'outgoing'], queryFn: () => social.listRequests('outgoing') })
+  return useQuery({
+    queryKey: ['requests', 'outgoing'],
+    queryFn: () => social.listRequests('outgoing'),
+  })
 }
 
 /** Send a friend request by email (one POST; the server resolves the user). */

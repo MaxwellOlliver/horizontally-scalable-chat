@@ -1,9 +1,6 @@
 import { and, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import type { Message } from '../../domain/message.js'
-import type {
-  MessagePage,
-  MessageRepository,
-} from '../../application/ports/message-repository.js'
+import type { MessagePage, MessageRepository } from '../../application/ports/message-repository.js'
 import type { Database } from '../db/client.js'
 import { messageReceipts, messages, type MessageRow } from '../db/schema.js'
 
@@ -30,7 +27,12 @@ export function createDrizzleMessageRepository(db: Database): MessageRepository 
       const [existing] = await db
         .select()
         .from(messages)
-        .where(and(eq(messages.senderId, message.senderId), eq(messages.clientMsgId, message.clientMsgId)))
+        .where(
+          and(
+            eq(messages.senderId, message.senderId),
+            eq(messages.clientMsgId, message.clientMsgId),
+          ),
+        )
         .limit(1)
       // Guaranteed present: the insert conflicted on this (sender, clientMsgId).
       return { message: toDomain(existing!), created: false }

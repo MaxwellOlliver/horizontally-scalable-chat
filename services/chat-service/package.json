@@ -8,11 +8,12 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@elysiajs/node": "^1.4.5",

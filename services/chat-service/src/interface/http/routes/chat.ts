@@ -56,22 +56,19 @@ export function createChatRoutes({ useCases, verifier }: ChatRoutesDeps) {
         return body
       }
     })
-    .get(
-      '/conversations/:conversationId/messages',
-      async ({ params, query, headers, set }) => {
-        try {
-          const me = await requireUser(headers.authorization, verifier)
-          const conversationId = conversationIdSchema.parse(params.conversationId)
-          const { before, limit } = historyQuerySchema.parse(query)
-          set.status = 200
-          return await useCases.getHistory.execute({ me, conversationId, before, limit })
-        } catch (err) {
-          const { status, body } = toHttpError(err)
-          set.status = status
-          return body
-        }
-      },
-    )
+    .get('/conversations/:conversationId/messages', async ({ params, query, headers, set }) => {
+      try {
+        const me = await requireUser(headers.authorization, verifier)
+        const conversationId = conversationIdSchema.parse(params.conversationId)
+        const { before, limit } = historyQuerySchema.parse(query)
+        set.status = 200
+        return await useCases.getHistory.execute({ me, conversationId, before, limit })
+      } catch (err) {
+        const { status, body } = toHttpError(err)
+        set.status = status
+        return body
+      }
+    })
     .get('/conversations/:conversationId/receipts', async ({ params, headers, set }) => {
       try {
         const me = await requireUser(headers.authorization, verifier)

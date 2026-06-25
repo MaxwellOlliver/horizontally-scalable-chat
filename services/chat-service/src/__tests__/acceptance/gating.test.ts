@@ -60,11 +60,9 @@ describe('Gating & revocation', () => {
     expect(h.messages.rows).toHaveLength(2)
 
     // Same conversation; full history preserved across the un-friend/re-friend.
-    const res = await h.request(
-      'GET',
-      `/chat/conversations/${conversationId}/messages`,
-      { token: a.token },
-    )
+    const res = await h.request('GET', `/chat/conversations/${conversationId}/messages`, {
+      token: a.token,
+    })
     expect(res.body.messages.map((m: any) => m.body)).toEqual(['after', 'before'])
   })
 

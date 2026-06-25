@@ -1,12 +1,12 @@
-import { initials } from "../../lib/format";
+import { initials } from '../../lib/format'
 
 /** Initial-based avatar. Override size/typography via `className`. */
 export function Avatar({
   name,
-  className = "h-9 w-9 text-[11px]",
+  className = 'h-9 w-9 text-[11px]',
 }: {
-  name: string | null;
-  className?: string;
+  name: string | null
+  className?: string
 }) {
   return (
     <span
@@ -14,5 +14,5 @@ export function Avatar({
     >
       {initials(name)}
     </span>
-  );
+  )
 }

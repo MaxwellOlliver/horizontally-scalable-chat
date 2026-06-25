@@ -42,7 +42,9 @@ export function ConversationRow({
         </span>
         <span className="mt-0.5 flex items-center gap-1.5">
           {item.state === 'closed' && (
-            <span className="shrink-0 text-[10px] uppercase tracking-wide text-fg-faint">closed</span>
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-fg-faint">
+              closed
+            </span>
           )}
           <span
             className={`min-w-0 flex-1 truncate text-[12.5px] ${

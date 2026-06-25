@@ -9,7 +9,10 @@ describe('Request validation', () => {
   })
 
   it('rejects a malformed register body (missing displayName) with 422', async () => {
-    const res = await h.request('POST', '/auth/register', { email: 'a@b.com', password: 'longenough1' })
+    const res = await h.request('POST', '/auth/register', {
+      email: 'a@b.com',
+      password: 'longenough1',
+    })
     expect(res.status).toBe(422)
   })
 

@@ -1,26 +1,26 @@
-import type { Env } from "./config/env.js";
-import type { Clock } from "./application/ports/clock.js";
-import { systemClock } from "./application/ports/clock.js";
-import type { AccessTokenVerifier } from "./application/ports/access-token-verifier.js";
-import type { DomainEventPublisher } from "./application/ports/domain-event-publisher.js";
-import type { FriendRequestRepository } from "./application/ports/friend-request-repository.js";
-import type { FriendshipRepository } from "./application/ports/friendship-repository.js";
-import type { IdGenerator } from "./application/ports/id-generator.js";
-import type { LivePush } from "./application/ports/live-push.js";
-import type { UserDirectory } from "./application/ports/user-directory.js";
-import { AcceptFriendRequest } from "./application/use-cases/accept-friend-request.js";
-import { AreFriends } from "./application/use-cases/are-friends.js";
-import { ListFriends } from "./application/use-cases/list-friends.js";
-import { ListPendingRequests } from "./application/use-cases/list-pending-requests.js";
-import { RejectFriendRequest } from "./application/use-cases/reject-friend-request.js";
-import { RemoveFriend } from "./application/use-cases/remove-friend.js";
-import { SendFriendRequest } from "./application/use-cases/send-friend-request.js";
-import { createDatabase, type Database } from "./infrastructure/db/client.js";
-import { createDrizzleUserDirectory } from "./infrastructure/directory/drizzle-user-directory.js";
-import { createRabbitMqDomainEventPublisher } from "./infrastructure/messaging/rabbitmq-domain-event-publisher.js";
-import { createRedisLivePush } from "./infrastructure/realtime/redis-live-push.js";
-import { createDrizzleFriendRequestRepository } from "./infrastructure/repositories/drizzle-friend-request-repository.js";
-import { createDrizzleFriendshipRepository } from "./infrastructure/repositories/drizzle-friendship-repository.js";
+import type { Env } from './config/env.js'
+import type { Clock } from './application/ports/clock.js'
+import { systemClock } from './application/ports/clock.js'
+import type { AccessTokenVerifier } from './application/ports/access-token-verifier.js'
+import type { DomainEventPublisher } from './application/ports/domain-event-publisher.js'
+import type { FriendRequestRepository } from './application/ports/friend-request-repository.js'
+import type { FriendshipRepository } from './application/ports/friendship-repository.js'
+import type { IdGenerator } from './application/ports/id-generator.js'
+import type { LivePush } from './application/ports/live-push.js'
+import type { UserDirectory } from './application/ports/user-directory.js'
+import { AcceptFriendRequest } from './application/use-cases/accept-friend-request.js'
+import { AreFriends } from './application/use-cases/are-friends.js'
+import { ListFriends } from './application/use-cases/list-friends.js'
+import { ListPendingRequests } from './application/use-cases/list-pending-requests.js'
+import { RejectFriendRequest } from './application/use-cases/reject-friend-request.js'
+import { RemoveFriend } from './application/use-cases/remove-friend.js'
+import { SendFriendRequest } from './application/use-cases/send-friend-request.js'
+import { createDatabase, type Database } from './infrastructure/db/client.js'
+import { createDrizzleUserDirectory } from './infrastructure/directory/drizzle-user-directory.js'
+import { createRabbitMqDomainEventPublisher } from './infrastructure/messaging/rabbitmq-domain-event-publisher.js'
+import { createRedisLivePush } from './infrastructure/realtime/redis-live-push.js'
+import { createDrizzleFriendRequestRepository } from './infrastructure/repositories/drizzle-friend-request-repository.js'
+import { createDrizzleFriendshipRepository } from './infrastructure/repositories/drizzle-friendship-repository.js'
 import {
   createJwtAccessTokenVerifier,
   createLogger,
@@ -28,18 +28,18 @@ import {
   resolveInstanceId,
   uuidv7Generator,
   type LogEmitter,
-} from "@hsc/platform";
-import type { SocialUseCases } from "./interface/http/routes/social.js";
+} from '@hsc/platform'
+import type { SocialUseCases } from './interface/http/routes/social.js'
 
 /** Everything the use-case layer depends on, as ports (clean-arch boundary). */
 export interface SocialPorts {
-  friendRequests: FriendRequestRepository;
-  friendships: FriendshipRepository;
-  events: DomainEventPublisher;
-  livePush: LivePush;
-  users: UserDirectory;
-  ids: IdGenerator;
-  clock: Clock;
+  friendRequests: FriendRequestRepository
+  friendships: FriendshipRepository
+  events: DomainEventPublisher
+  livePush: LivePush
+  users: UserDirectory
+  ids: IdGenerator
+  clock: Clock
 }
 
 /**
@@ -55,46 +55,43 @@ export function assembleUseCases(ports: SocialPorts): SocialUseCases {
     livePush: ports.livePush,
     ids: ports.ids,
     clock: ports.clock,
-  };
+  }
   return {
     sendFriendRequest: new SendFriendRequest({
       ...acceptDeps,
       users: ports.users,
     }),
     acceptFriendRequest: new AcceptFriendRequest(acceptDeps),
-    rejectFriendRequest: new RejectFriendRequest(
-      ports.friendRequests,
-      ports.clock,
-    ),
+    rejectFriendRequest: new RejectFriendRequest(ports.friendRequests, ports.clock),
     removeFriend: new RemoveFriend(acceptDeps),
     areFriends: new AreFriends(ports.friendships),
     listFriends: new ListFriends(ports.friendships, ports.users),
     listPendingRequests: new ListPendingRequests(ports.friendRequests, ports.users),
-  };
+  }
 }
 
 export interface Container {
-  useCases: SocialUseCases;
-  verifier: AccessTokenVerifier;
-  logger: LogEmitter;
-  db: Database;
-  close(): Promise<void>;
+  useCases: SocialUseCases
+  verifier: AccessTokenVerifier
+  logger: LogEmitter
+  db: Database
+  close(): Promise<void>
 }
 
 /** Production container: real adapters wired from validated env. */
 export function createContainer(env: Env): Container {
-  const db = createDatabase(env.DATABASE_URL);
+  const db = createDatabase(env.DATABASE_URL)
   const events = createRabbitMqDomainEventPublisher({
     url: env.RABBITMQ_URL,
     exchange: env.DOMAIN_EVENTS_EXCHANGE,
-  });
-  const livePush = createRedisLivePush(env.REDIS_URL);
-  const logPublisher = createRedisPublisher(env.REDIS_URL);
+  })
+  const livePush = createRedisLivePush(env.REDIS_URL)
+  const logPublisher = createRedisPublisher(env.REDIS_URL)
   const logger = createLogger({
-    instanceId: resolveInstanceId("social-service"),
-    source: "social-service",
+    instanceId: resolveInstanceId('social-service'),
+    source: 'social-service',
     publish: (channel, message) => logPublisher.publish(channel, message),
-  });
+  })
 
   const useCases = assembleUseCases({
     friendRequests: createDrizzleFriendRequestRepository(db),
@@ -104,7 +101,7 @@ export function createContainer(env: Env): Container {
     users: createDrizzleUserDirectory(db),
     ids: uuidv7Generator,
     clock: systemClock,
-  });
+  })
 
   return {
     useCases,
@@ -112,12 +109,7 @@ export function createContainer(env: Env): Container {
     logger,
     db,
     close: async () => {
-      await Promise.allSettled([
-        db.close(),
-        events.close(),
-        livePush.close(),
-        logPublisher.close(),
-      ]);
+      await Promise.allSettled([db.close(), events.close(), livePush.close(), logPublisher.close()])
     },
-  };
+  }
 }

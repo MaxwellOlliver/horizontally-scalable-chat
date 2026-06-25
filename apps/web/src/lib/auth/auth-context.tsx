@@ -15,7 +15,11 @@ import type { AuthContextValue, Profile, Session } from './types'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function sessionFrom(accessToken: string, refreshToken: string, extra: Omit<Profile, 'id'>): Session {
+function sessionFrom(
+  accessToken: string,
+  refreshToken: string,
+  extra: Omit<Profile, 'id'>,
+): Session {
   const id = decodeJwt(accessToken)?.sub ?? 'unknown'
   return { accessToken, refreshToken, profile: { id, ...extra } }
 }

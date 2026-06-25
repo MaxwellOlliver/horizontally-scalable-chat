@@ -12,11 +12,6 @@ export function usePresence(friendId: string): PresenceStatus {
   const { send, subscribe, linkState } = useWebSocket()
   const [status, setStatus] = useState<PresenceStatus>('offline')
 
-  // Unknown until the gateway answers.
-  useEffect(() => {
-    setStatus('offline')
-  }, [friendId])
-
   useEffect(() => {
     if (linkState !== 'live') return
     send({ type: 'presence.subscribe', userIds: [friendId] })

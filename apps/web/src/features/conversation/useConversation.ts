@@ -59,7 +59,10 @@ export function useConversation(friendId: string): UseConversationResult {
 
   useEffect(() => {
     if (historyQuery.data) {
-      dispatch({ type: 'merge', messages: historyQuery.data.messages.map((m) => fromHistory(m, me)) })
+      dispatch({
+        type: 'merge',
+        messages: historyQuery.data.messages.map((m) => fromHistory(m, me)),
+      })
     }
   }, [historyQuery.data, me])
 
@@ -85,7 +88,12 @@ export function useConversation(friendId: string): UseConversationResult {
           },
         })
       } else if (frame.type === 'message.sent') {
-        dispatch({ type: 'ack', clientMsgId: frame.data.clientMsgId, id: frame.data.id, createdAt: frame.data.createdAt })
+        dispatch({
+          type: 'ack',
+          clientMsgId: frame.data.clientMsgId,
+          id: frame.data.id,
+          createdAt: frame.data.createdAt,
+        })
         if (conversationIdRef.current === null) {
           qc.invalidateQueries({ queryKey: ['conversation', friendId] })
         }
@@ -118,15 +126,13 @@ export function useConversation(friendId: string): UseConversationResult {
     [send, friendId, me],
   )
 
-  // ---- receipts -------------------------------------------------------------
-
   // The partner's marks, for rendering MY messages. Seeded from the resync fetch,
   // kept current by receipt.update frames. (1:1 → any receipt from the friend is
   // for this conversation.)
-  const [receipts, setReceipts] = useState<ConversationReceipts>({ deliveredUpTo: null, readUpTo: null })
-  useEffect(() => {
-    setReceipts({ deliveredUpTo: null, readUpTo: null })
-  }, [friendId])
+  const [receipts, setReceipts] = useState<ConversationReceipts>({
+    deliveredUpTo: null,
+    readUpTo: null,
+  })
 
   const receiptsQuery = useQuery({
     queryKey: ['receipts', conversationId],

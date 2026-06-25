@@ -61,7 +61,13 @@ export function createLogger(config: LoggerConfig): LogEmitter {
       const targets = typeof userIds === 'string' ? [userIds] : userIds
       const frame: LogFrame = {
         type: 'log',
-        data: { instance: instanceId, source, event, at: now().toISOString(), ...(detail ? { detail } : {}) },
+        data: {
+          instance: instanceId,
+          source,
+          event,
+          at: now().toISOString(),
+          ...(detail ? { detail } : {}),
+        },
       }
       // Dedup so an action where actor === counterparty isn't double-logged.
       for (const userId of new Set(targets)) {

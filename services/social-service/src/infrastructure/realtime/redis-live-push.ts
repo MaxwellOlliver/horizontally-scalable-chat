@@ -15,8 +15,7 @@ export interface ClosableLivePush extends LivePush {
 export function createRedisLivePush(url: string): ClosableLivePush {
   const publisher = createRedisPublisher(url)
   return {
-    pushToUser: (userId: string, frame: LiveFrame) =>
-      publisher.publish(userChannel(userId), frame),
+    pushToUser: (userId: string, frame: LiveFrame) => publisher.publish(userChannel(userId), frame),
     close: () => publisher.close(),
   }
 }

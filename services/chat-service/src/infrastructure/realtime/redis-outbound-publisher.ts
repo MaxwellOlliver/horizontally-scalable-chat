@@ -1,5 +1,8 @@
 import { createRedisPublisher, userChannel } from '@hsc/platform'
-import type { OutboundFrame, OutboundPublisher } from '../../application/ports/outbound-publisher.js'
+import type {
+  OutboundFrame,
+  OutboundPublisher,
+} from '../../application/ports/outbound-publisher.js'
 
 export interface ClosableOutboundPublisher extends OutboundPublisher {
   close(): Promise<void>

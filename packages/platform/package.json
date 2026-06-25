@@ -13,9 +13,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "amqplib": "^0.10.5",

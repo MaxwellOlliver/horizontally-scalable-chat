@@ -1,18 +1,18 @@
-import { canonicalPair, pairKey, type Conversation } from '../../domain/conversation.js'
+import { pairKey, type Conversation } from '../../domain/conversation.js'
 import type { Message } from '../../domain/message.js'
 import type { Clock } from '../../application/ports/clock.js'
 import type { ConversationRepository } from '../../application/ports/conversation-repository.js'
-import type {
-  FriendsReadModel,
-  FriendState,
-} from '../../application/ports/friends-read-model.js'
+import type { FriendsReadModel, FriendState } from '../../application/ports/friends-read-model.js'
 import type { IdGenerator } from '../../application/ports/id-generator.js'
+import type { MessagePage, MessageRepository } from '../../application/ports/message-repository.js'
 import type {
-  MessagePage,
-  MessageRepository,
-} from '../../application/ports/message-repository.js'
-import type { OutboundFrame, OutboundPublisher } from '../../application/ports/outbound-publisher.js'
-import type { ReceiptPointer, ReceiptRepository } from '../../application/ports/receipt-repository.js'
+  OutboundFrame,
+  OutboundPublisher,
+} from '../../application/ports/outbound-publisher.js'
+import type {
+  ReceiptPointer,
+  ReceiptRepository,
+} from '../../application/ports/receipt-repository.js'
 import type { UserDirectory, UserProfile } from '../../application/ports/user-directory.js'
 
 /** Advanceable clock for deterministic timestamps. */

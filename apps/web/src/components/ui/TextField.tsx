@@ -1,13 +1,13 @@
-import { useId, type InputHTMLAttributes } from "react";
+import { useId, type InputHTMLAttributes } from 'react'
 
 /** Labeled text input in the Relay language (inset dark field, lime focus ring). */
 export function TextField({
   label,
   hint,
-  className = "",
+  className = '',
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: string }) {
-  const id = useId();
+  const id = useId()
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
@@ -22,5 +22,5 @@ export function TextField({
       />
       {hint && <p className="text-[12px] text-fg-faint">{hint}</p>}
     </div>
-  );
+  )
 }

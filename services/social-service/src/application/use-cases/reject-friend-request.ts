@@ -24,7 +24,12 @@ export class RejectFriendRequest {
     if (request.addresseeId !== me) {
       throw new NotAddresseeError() // AC-R3
     }
-    const updated = await this.friendRequests.transition(requestId, me, 'rejected', this.clock.now())
+    const updated = await this.friendRequests.transition(
+      requestId,
+      me,
+      'rejected',
+      this.clock.now(),
+    )
     if (!updated) {
       throw new RequestNotPendingError() // AC-R4
     }

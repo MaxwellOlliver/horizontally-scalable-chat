@@ -70,11 +70,7 @@ export interface Harness {
   /** Drives the `domain.events` handler with a raw friend event (the real event path). */
   deliverFriendEvent: (event: Record<string, unknown>) => Promise<void>
   /** Convenience: emit a well-formed `friend_request.accepted`. */
-  acceptFriends: (
-    requesterId: string,
-    addresseeId: string,
-    eventId?: string,
-  ) => Promise<void>
+  acceptFriends: (requesterId: string, addresseeId: string, eventId?: string) => Promise<void>
   /** Convenience: emit a well-formed `friendship.removed`. */
   removeFriends: (x: string, y: string, eventId?: string) => Promise<void>
   request: (method: string, path: string, opts?: RequestOptions) => Promise<TestResponse>
@@ -128,7 +124,11 @@ export function buildHarness(overrides: { outbound?: OutboundPublisher } = {}): 
     outbound: overrides.outbound ?? outbound,
     logger: {
       emit: (userIds, event, detail) =>
-        logs.push({ userIds: typeof userIds === 'string' ? [userIds] : [...userIds], event, detail }),
+        logs.push({
+          userIds: typeof userIds === 'string' ? [userIds] : [...userIds],
+          event,
+          detail,
+        }),
     },
   })
   const friendEventHandler = createFriendEventHandler({

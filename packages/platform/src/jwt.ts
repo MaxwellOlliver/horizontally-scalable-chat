@@ -19,10 +19,7 @@ export interface AccessTokenVerifier {
  * cross-service contract the gateway verifies against). The `sub` claim is the
  * caller's user id.
  */
-export function createJwtAccessTokenVerifier(
-  secret: string,
-  issuer: string,
-): AccessTokenVerifier {
+export function createJwtAccessTokenVerifier(secret: string, issuer: string): AccessTokenVerifier {
   const key = new TextEncoder().encode(secret)
   return {
     async verify(token: string): Promise<AuthenticatedUser> {

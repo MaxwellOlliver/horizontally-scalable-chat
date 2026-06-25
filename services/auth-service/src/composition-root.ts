@@ -58,18 +58,9 @@ export function assembleUseCases(ports: AuthPorts): AuthUseCases {
 
   return {
     registerUser: new RegisterUser(ports.users, ports.hasher, ports.ids, ports.clock),
-    authenticateUser: new AuthenticateUser(
-      ports.users,
-      ports.hasher,
-      session,
-      ports.dummyHash,
-    ),
+    authenticateUser: new AuthenticateUser(ports.users, ports.hasher, session, ports.dummyHash),
     refreshSession: new RefreshSession(session),
-    revokeSession: new RevokeSession(
-      ports.refreshTokens,
-      ports.refreshTokenService,
-      ports.clock,
-    ),
+    revokeSession: new RevokeSession(ports.refreshTokens, ports.refreshTokenService, ports.clock),
   }
 }
 

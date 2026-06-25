@@ -25,11 +25,9 @@ describe('History', () => {
   it('AC-H2: returns messages most-recent-first, ordered by UUIDv7', async () => {
     const conversationId = await seed(['one', 'two', 'three'])
 
-    const res = await h.request(
-      'GET',
-      `/chat/conversations/${conversationId}/messages`,
-      { token: a.token },
-    )
+    const res = await h.request('GET', `/chat/conversations/${conversationId}/messages`, {
+      token: a.token,
+    })
     expect(res.status).toBe(200)
     expect(res.body.messages.map((m: any) => m.body)).toEqual(['three', 'two', 'one'])
     // Strictly descending by id (AC-H2).
@@ -40,11 +38,9 @@ describe('History', () => {
   it('AC-H1: paginates by a UUIDv7 cursor', async () => {
     const conversationId = await seed(['m0', 'm1', 'm2', 'm3', 'm4'])
 
-    const first = await h.request(
-      'GET',
-      `/chat/conversations/${conversationId}/messages?limit=2`,
-      { token: b.token },
-    )
+    const first = await h.request('GET', `/chat/conversations/${conversationId}/messages?limit=2`, {
+      token: b.token,
+    })
     expect(first.body.messages.map((m: any) => m.body)).toEqual(['m4', 'm3'])
     expect(first.body.nextCursor).toBe(first.body.messages[1].id)
 
@@ -68,11 +64,9 @@ describe('History', () => {
     const conversationId = await seed(['secret'])
     const stranger = await h.createUser()
 
-    const res = await h.request(
-      'GET',
-      `/chat/conversations/${conversationId}/messages`,
-      { token: stranger.token },
-    )
+    const res = await h.request('GET', `/chat/conversations/${conversationId}/messages`, {
+      token: stranger.token,
+    })
     expect(res.status).toBe(403)
     expect(res.body.error).toBe('NOT_PARTICIPANT')
   })

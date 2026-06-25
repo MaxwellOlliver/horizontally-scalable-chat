@@ -20,7 +20,11 @@ export function Sidebar() {
         <TabButton active={tab === 'chats'} onClick={() => setTab('chats')}>
           Chats
         </TabButton>
-        <TabButton active={tab === 'friends'} onClick={() => setTab('friends')} badge={requestCount}>
+        <TabButton
+          active={tab === 'friends'}
+          onClick={() => setTab('friends')}
+          badge={requestCount}
+        >
           Friends
         </TabButton>
       </div>

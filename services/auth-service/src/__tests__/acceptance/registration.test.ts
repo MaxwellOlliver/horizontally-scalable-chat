@@ -8,7 +8,11 @@ describe('Registration', () => {
     h = buildHarness()
   })
 
-  const valid = { email: 'New.User@Example.com', password: 'a-strong-password', displayName: 'New User' }
+  const valid = {
+    email: 'New.User@Example.com',
+    password: 'a-strong-password',
+    displayName: 'New User',
+  }
 
   it('AC-R1: accepts a unique, policy-compliant registration, assigns an id, returns 201', async () => {
     const res = await h.request('POST', '/auth/register', valid)

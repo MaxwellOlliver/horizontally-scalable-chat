@@ -1,6 +1,6 @@
-import type { DomainEvent } from "../domain/events.js";
-import type { DomainEventPublisher } from "./ports/domain-event-publisher.js";
-import type { LiveFrame, LivePush } from "./ports/live-push.js";
+import type { DomainEvent } from '../domain/events.js'
+import type { DomainEventPublisher } from './ports/domain-event-publisher.js'
+import type { LiveFrame, LivePush } from './ports/live-push.js'
 
 /**
  * Best-effort outbound. The state change is already durably committed before
@@ -13,21 +13,16 @@ export async function safePublish(
   event: DomainEvent,
 ): Promise<void> {
   try {
-    await publisher.publish(event);
+    await publisher.publish(event)
   } catch (err) {
-    console.error(`[social] event publish failed: ${event.type}`, err);
+    console.error(`[social] event publish failed: ${event.type}`, err)
   }
 }
 
-export async function safePush(
-  push: LivePush,
-  userId: string,
-  frame: LiveFrame,
-): Promise<void> {
+export async function safePush(push: LivePush, userId: string, frame: LiveFrame): Promise<void> {
   try {
-    await push.pushToUser(userId, frame);
-    console.log("[social] live push succeed");
+    await push.pushToUser(userId, frame)
   } catch (err) {
-    console.error(`[social] live push failed: ${frame.type}`, err);
+    console.error(`[social] live push failed: ${frame.type}`, err)
   }
 }

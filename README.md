@@ -8,6 +8,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/MaxwellOlliver/horizontally-scalable-chat/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MaxwellOlliver/horizontally-scalable-chat/actions/workflows/ci.yml/badge.svg" /></a>
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" />
+</p>
+
+<p align="center">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white&style=flat-square" />
   <img alt="React" src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB&style=flat-square" />
   <img alt="Go" src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white&style=flat-square" />

@@ -18,7 +18,9 @@ describe('Removing a friend', () => {
       token: from.token,
       body: { email: to.email },
     })
-    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, { token: to.token })
+    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, {
+      token: to.token,
+    })
   }
 
   it('AC-U1: the requester (a party) can remove the friendship → 204, friendship gone', async () => {
@@ -64,9 +66,13 @@ describe('Removing a friend', () => {
     expect(res.body.status).toBe('pending')
 
     // And it can be accepted back into a friendship.
-    const accept = await h.request('POST', `/social/friends/requests/${res.body.requestId}/accept`, {
-      token: b.token,
-    })
+    const accept = await h.request(
+      'POST',
+      `/social/friends/requests/${res.body.requestId}/accept`,
+      {
+        token: b.token,
+      },
+    )
     expect(accept.status).toBe(200)
     expect(await h.friendships.areFriends(a.id, b.id)).toBe(true)
   })

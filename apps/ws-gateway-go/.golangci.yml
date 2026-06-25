@@ -1,0 +1,23 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # Default set (errcheck, govet, ineffassign, staticcheck, unused) plus a few.
+  enable:
+    - misspell
+    - unconvert
+    - bodyclose
+  exclusions:
+    rules:
+      # Discarded responses / unchecked Close are fine in test helpers.
+      - path: _test\.go
+        linters:
+          - bodyclose
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

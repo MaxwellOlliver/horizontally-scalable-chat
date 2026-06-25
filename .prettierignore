@@ -1,0 +1,7 @@
+**/dist/**
+**/.turbo/**
+pnpm-lock.yaml
+**/*.gen.ts
+**/migrations/**
+apps/ws-gateway-go/**
+**/*.md

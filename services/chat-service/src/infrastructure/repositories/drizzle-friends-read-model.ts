@@ -1,9 +1,6 @@
 import { eq, lt } from 'drizzle-orm'
 import { pairKey } from '../../domain/conversation.js'
-import type {
-  FriendsReadModel,
-  FriendState,
-} from '../../application/ports/friends-read-model.js'
+import type { FriendsReadModel, FriendState } from '../../application/ports/friends-read-model.js'
 import type { Database } from '../db/client.js'
 import { friendsReadModel } from '../db/schema.js'
 
@@ -18,12 +15,7 @@ export function createDrizzleFriendsReadModel(db: Database): FriendsReadModel {
       return row?.state === 'active'
     },
 
-    async apply(
-      pair: string,
-      state: FriendState,
-      eventId: string,
-      at: Date,
-    ): Promise<boolean> {
+    async apply(pair: string, state: FriendState, eventId: string, at: Date): Promise<boolean> {
       // Upsert last-writer-wins by eventId: insert when new, otherwise update
       // ONLY if this event is newer than the stored one. When the conditional
       // update is skipped (stale/duplicate), RETURNING yields no row (AC-G1).

@@ -1,12 +1,5 @@
 import { sql } from 'drizzle-orm'
-import {
-  check,
-  pgEnum,
-  pgTable,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core'
+import { check, pgEnum, pgTable, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 /**
  * Friend-request status (spec §2.2). The lifecycle is a single-shot state

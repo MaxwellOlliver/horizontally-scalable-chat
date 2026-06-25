@@ -1,25 +1,23 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes } from 'react'
 
-type Variant = "primary" | "ghost";
+type Variant = 'primary' | 'ghost'
 
 const VARIANTS: Record<Variant, string> = {
   // Rose accent is light, so dark ink text reads cleanly on it.
-  primary:
-    "bg-accent text-ink hover:bg-accent-strong disabled:hover:bg-accent font-medium",
-  ghost:
-    "bg-panel-2 text-fg-muted hover:bg-panel-3 hover:text-fg",
-};
+  primary: 'bg-accent text-ink hover:bg-accent-strong disabled:hover:bg-accent font-medium',
+  ghost: 'bg-panel-2 text-fg-muted hover:bg-panel-3 hover:text-fg',
+}
 
 export function Button({
-  variant = "primary",
+  variant = 'primary',
   loading = false,
-  className = "",
+  className = '',
   children,
   disabled,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant;
-  loading?: boolean;
+  variant?: Variant
+  loading?: boolean
 }) {
   return (
     <button
@@ -32,5 +30,5 @@ export function Button({
       )}
       {children}
     </button>
-  );
+  )
 }

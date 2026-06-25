@@ -29,11 +29,7 @@ export function createDrizzleFriendRequestRepository(db: Database): FriendReques
     },
 
     async findById(id: string): Promise<FriendRequest | null> {
-      const [row] = await db
-        .select()
-        .from(friendRequests)
-        .where(eq(friendRequests.id, id))
-        .limit(1)
+      const [row] = await db.select().from(friendRequests).where(eq(friendRequests.id, id)).limit(1)
       return row ? toDomain(row) : null
     },
 

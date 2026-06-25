@@ -11,7 +11,9 @@ const ISSUER = 'hsc-auth-test'
 const key = new TextEncoder().encode(SECRET)
 
 function mint(claims: { sub?: string; issuer?: string } = {}): Promise<string> {
-  let jwt = new SignJWT({}).setProtectedHeader({ alg: 'HS256', typ: 'JWT' }).setExpirationTime('10m')
+  let jwt = new SignJWT({})
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setExpirationTime('10m')
   if (claims.sub !== undefined) jwt = jwt.setSubject(claims.sub)
   jwt = jwt.setIssuer(claims.issuer ?? ISSUER)
   return jwt.sign(key)

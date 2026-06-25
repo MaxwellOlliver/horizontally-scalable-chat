@@ -15,7 +15,10 @@ describe('Logging', () => {
   it('logs a sent request to the requester and a received to the addressee', async () => {
     const a = await h.createUser()
     const b = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: b.email } })
+    await h.request('POST', '/social/friends/requests', {
+      token: a.token,
+      body: { email: b.email },
+    })
     expect(h.logs).toContainEqual({ userIds: [a.id], event: 'Friend request sent' })
     expect(h.logs).toContainEqual({ userIds: [b.id], event: 'Friend request received' })
   })
@@ -42,7 +45,9 @@ describe('Logging', () => {
       token: a.token,
       body: { email: b.email },
     })
-    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, { token: b.token })
+    await h.request('POST', `/social/friends/requests/${sent.body.requestId}/accept`, {
+      token: b.token,
+    })
     await h.request('DELETE', `/social/friends/${b.id}`, { token: a.token })
     expect(h.logs).toContainEqual({ userIds: [a.id], event: 'Friend removed' })
     expect(h.logs).toContainEqual({ userIds: [b.id], event: 'Friend removed' })
@@ -50,7 +55,10 @@ describe('Logging', () => {
 
   it('does not log when the action fails (request to yourself)', async () => {
     const a = await h.createUser()
-    await h.request('POST', '/social/friends/requests', { token: a.token, body: { email: a.email } })
+    await h.request('POST', '/social/friends/requests', {
+      token: a.token,
+      body: { email: a.email },
+    })
     expect(h.logs).toHaveLength(0)
   })
 })

@@ -28,7 +28,12 @@ describe('Receipts', () => {
 
     const update = h.outbound.to(a.id).findLast((f) => f.type === 'receipt.update')
     expect(update).toBeDefined()
-    expect(update!.data).toMatchObject({ conversationId, by: b.id, deliveredUpTo: id, readUpTo: id })
+    expect(update!.data).toMatchObject({
+      conversationId,
+      by: b.id,
+      deliveredUpTo: id,
+      readUpTo: id,
+    })
   })
 
   it('a delivered-only receipt does not advance read', async () => {

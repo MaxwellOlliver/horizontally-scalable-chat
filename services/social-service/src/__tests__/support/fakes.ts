@@ -66,7 +66,11 @@ export class InMemoryFriendRequestRepository implements FriendRequestRepository 
 
   async findPending(requesterId: string, addresseeId: string): Promise<FriendRequest | null> {
     for (const r of this.rows.values()) {
-      if (r.status === 'pending' && r.requesterId === requesterId && r.addresseeId === addresseeId) {
+      if (
+        r.status === 'pending' &&
+        r.requesterId === requesterId &&
+        r.addresseeId === addresseeId
+      ) {
         return { ...r }
       }
     }
@@ -88,10 +92,7 @@ export class InMemoryFriendRequestRepository implements FriendRequestRepository 
     return { ...updated }
   }
 
-  async listPending(
-    userId: string,
-    direction: 'incoming' | 'outgoing',
-  ): Promise<FriendRequest[]> {
+  async listPending(userId: string, direction: 'incoming' | 'outgoing'): Promise<FriendRequest[]> {
     const out: FriendRequest[] = []
     for (const r of this.rows.values()) {
       if (r.status !== 'pending') continue
@@ -180,7 +181,8 @@ export class InMemoryUserDirectory implements UserDirectory {
 
   async findByEmail(email: string): Promise<UserProfile | null> {
     for (const p of this.profiles.values()) {
-      if (p.email.toLowerCase() === email.toLowerCase()) return { id: p.id, displayName: p.displayName }
+      if (p.email.toLowerCase() === email.toLowerCase())
+        return { id: p.id, displayName: p.displayName }
     }
     return null
   }

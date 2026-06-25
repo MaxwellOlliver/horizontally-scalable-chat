@@ -25,7 +25,9 @@ describe('Responding to a friend request', () => {
   it('AC-R1: the addressee accepts, creating a symmetric friendship', async () => {
     const id = await sendPending()
 
-    const res = await h.request('POST', `/social/friends/requests/${id}/accept`, { token: addressee.token })
+    const res = await h.request('POST', `/social/friends/requests/${id}/accept`, {
+      token: addressee.token,
+    })
 
     expect(res.status).toBe(200)
     expect(typeof res.body.friendshipId).toBe('string')
@@ -36,7 +38,9 @@ describe('Responding to a friend request', () => {
   it('AC-R2: the addressee rejects, marking it rejected with no friendship', async () => {
     const id = await sendPending()
 
-    const res = await h.request('POST', `/social/friends/requests/${id}/reject`, { token: addressee.token })
+    const res = await h.request('POST', `/social/friends/requests/${id}/reject`, {
+      token: addressee.token,
+    })
 
     expect(res.status).toBe(204)
     expect(h.friendRequests.rows.get(id)!.status).toBe('rejected')

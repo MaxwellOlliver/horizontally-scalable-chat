@@ -178,7 +178,6 @@ function createConsumer(
       conn = null
       if (!closed) void runConnectLoop()
     })
-    console.log('[platform] rabbitmq consumer connected')
   }
 
   async function runConnectLoop(): Promise<void> {
@@ -217,7 +216,11 @@ function createConsumer(
   }
 }
 
-async function dispatch(channel: Channel, handler: RabbitMqHandler, msg: ConsumeMessage): Promise<void> {
+async function dispatch(
+  channel: Channel,
+  handler: RabbitMqHandler,
+  msg: ConsumeMessage,
+): Promise<void> {
   let body: unknown
   try {
     body = JSON.parse(msg.content.toString())

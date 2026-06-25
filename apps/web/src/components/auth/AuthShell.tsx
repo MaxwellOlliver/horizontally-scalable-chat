@@ -35,10 +35,7 @@ export function AuthShell({
 /** Inline form-level error in the danger tone. */
 export function FormError({ children }: { children: ReactNode }) {
   return (
-    <div
-      role="alert"
-      className="rounded-lg bg-danger/12 px-3 py-2 text-[13px] text-danger"
-    >
+    <div role="alert" className="rounded-lg bg-danger/12 px-3 py-2 text-[13px] text-danger">
       {children}
     </div>
   )
